@@ -187,7 +187,7 @@ Une fois connecté à la session screen du serveur C2, vous pouvez utiliser les 
 
 ## Remerciements
 
-Un grand merci à Dalas pour le code du scanner de bot qui a servi de base pour le développement de ce projet.
+Un grand merci à !Dalas pour le code du scanner de bot qui a servi de base pour le développement de ce projet.
 
 ## Architecture du botnet
 
