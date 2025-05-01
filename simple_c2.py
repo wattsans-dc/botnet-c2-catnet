@@ -120,6 +120,7 @@ def handle_bot(client_socket, address):
                     pass
                 else:
                     # Ne pas afficher les autres messages
+                    pass
             except Exception as e:
                 # Ne pas afficher les erreurs de communication pour chaque bot
                 pass
