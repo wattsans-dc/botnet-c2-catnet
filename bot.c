@@ -4,26 +4,13 @@
 #define __USE_GNU
 
 /* Contournement pour les problèmes de asm/socket.h */
-#ifdef __SPARC__
-#define __ASM_SPARC_SOCKET_H
+#if defined(__SPARC__) || defined(__MIPS__) || defined(__ARM__) || defined(__PPC__)
+/* Définir les constantes nécessaires pour éviter d'inclure asm/socket.h */
+#define __ASM_GENERIC_SOCKET_H
+#define FIONREAD 0x541B
 #endif
 
-#ifdef __MIPS__
-#define __ASM_MIPS_SOCKET_H
-#endif
-
-#ifdef __ARM__
-#define __ASM_ARM_SOCKET_H
-#endif
-
-#ifdef __PPC__
-#define __ASM_POWERPC_SOCKET_H
-#endif
-
-/* Définitions de socket manquantes pour certaines architectures */
-#ifndef SOCK_NONBLOCK
-#define SOCK_NONBLOCK 0
-#endif
+/* Nous n'utilisons pas SOCK_NONBLOCK directement, nous utilisons fcntl() à la place */
 
 /* Configuration */
 #define BUFFER_SIZE 1024
@@ -40,15 +27,15 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/wait.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
 
-/* Socket header */
+/* Socket headers - ordre spécifique pour éviter les problèmes de compilation croisée */
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 /* Headers optionnels (si disponibles) */
 #ifdef __linux__
@@ -70,6 +57,23 @@
 
 #ifndef IPPROTO_ICMP
 #define IPPROTO_ICMP 1
+#endif
+
+/* Définitions de socket manquantes pour certaines architectures */
+#ifndef AF_INET
+#define AF_INET 2
+#endif
+
+#ifndef SOCK_STREAM
+#define SOCK_STREAM 1
+#endif
+
+#ifndef SOCK_DGRAM
+#define SOCK_DGRAM 2
+#endif
+
+#ifndef SOCK_RAW
+#define SOCK_RAW 3
 #endif
 
 #include <dirent.h>

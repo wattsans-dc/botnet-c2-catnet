@@ -88,9 +88,34 @@ sudo apt install -y \
   libc6-dev-sparc64-cross \
   linux-headers-$(uname -r)
 
-# Créer les liens symboliques nécessaires
+# Créer les liens symboliques nécessaires pour toutes les architectures
+# SPARC
 sudo mkdir -p /usr/sparc64-linux-gnu/usr/include
 sudo ln -s /usr/include/asm-generic /usr/sparc64-linux-gnu/usr/include/asm
+
+# MIPS
+sudo mkdir -p /usr/mips-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/mips-linux-gnu/include/asm
+
+# ARM
+sudo mkdir -p /usr/arm-linux-gnueabi/include
+sudo ln -s /usr/include/asm-generic /usr/arm-linux-gnueabi/include/asm
+
+# ARM64
+sudo mkdir -p /usr/aarch64-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/aarch64-linux-gnu/include/asm
+
+# PowerPC
+sudo mkdir -p /usr/powerpc-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/powerpc-linux-gnu/include/asm
+
+# SH4
+sudo mkdir -p /usr/sh4-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/sh4-linux-gnu/include/asm
+
+# M68K
+sudo mkdir -p /usr/m68k-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/m68k-linux-gnu/include/asm
 
 
 ```
