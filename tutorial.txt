@@ -150,6 +150,16 @@ m68k-linux-gnu-gcc -static -o bot.m68k bot.c
 sparc64-linux-gnu-gcc -static -o bot.sparc bot.c -D__SPARC__
 ```
 
+### Résolution des erreurs de compilation
+
+```bash
+# Résoudre l'erreur "asm/errno.h: No such file or directory"
+# Créer les liens symboliques nécessaires
+sudo mkdir -p /usr/include/asm
+sudo ln -s /usr/include/asm-generic/errno.h /usr/include/asm/errno.h
+sudo ln -s /usr/include/asm-generic/errno-base.h /usr/include/asm/errno-base.h
+```
+
 ## 3. Configuration du serveur C2
 
 1. Démarrer le serveur C2 : python simple_c2.py
