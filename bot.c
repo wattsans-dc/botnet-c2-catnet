@@ -13,7 +13,7 @@
 #include <sys/wait.h>
 #include <dirent.h>
 
-#define C2_SERVER "51.68.128.169"
+#define C2_SERVER "your ip"
 #define C2_PORT 1337
 #define BUFFER_SIZE 1024
 

