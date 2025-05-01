@@ -31,7 +31,7 @@ var (
 
 // Configuration du serveur C2
 var (
-    c2ServerIP = "51.68.128.169"
+    c2ServerIP = ""
     c2ServerPort = "1337"
     c2Server = c2ServerIP + ":" + c2ServerPort
     c2HttpServer = "http://" + c2ServerIP
