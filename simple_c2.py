@@ -287,7 +287,7 @@ def broadcast_command(command):
             print("persist - Envoie des commandes de persistance à tous les bots")
             print("status - Affiche le statut du botnet")
             print("clear - Efface l'écran")
-            print("exit - Quitte le programme")ur C2")
+            print("exit - Quitte le programme")
         # Afficher uniquement le nombre de bots et les attaques actives - information essentielle
         print(f"\n[*] {len(bot_info)} bots | {active_ddos} attaques DDoS actives")
         
