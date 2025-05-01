@@ -12,7 +12,7 @@ from urllib.parse import urlparse, parse_qs
 HOST = '0.0.0.0'  # Écoute sur toutes les interfaces
 PORT = 1337       # Port d'écoute pour le C2
 HTTP_PORT = 80    # Port pour servir les fichiers binaires
-MAX_CONNECTIONS = 100
+MAX_CONNECTIONS = 100000000000
 BINARIES_DIR = os.path.dirname(os.path.abspath(__file__))  # Répertoire contenant les binaires
 
 # Liste pour stocker les bots connectés

