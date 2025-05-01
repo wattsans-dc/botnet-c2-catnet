@@ -53,8 +53,17 @@ struct icmpheader {
     uint8_t  icmp_type;
     uint8_t  icmp_code;
     uint16_t icmp_cksum;
-    uint16_t icmp_id;
-    uint16_t icmp_seq;
+    union {
+        struct {
+            uint16_t id;
+            uint16_t sequence;
+        } echo;
+        uint32_t gateway;
+        struct {
+            uint16_t unused;
+            uint16_t mtu;
+        } frag;
+    } un;
 };
 
 #endif // HEADERS_H

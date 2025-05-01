@@ -448,8 +448,8 @@ void *pps_worker(void *arg) {
         // Fill ICMP header (ping-like packet)
         icmph->icmp_type = ICMP_ECHO;  // Echo request (ping)
         icmph->icmp_code = 0;
-        icmph->icmp_id = rand() % 65535;
-        icmph->icmp_seq = rand();
+        icmph->un.echo.id = rand() % 65535;
+        icmph->un.echo.sequence = rand();
         icmph->icmp_cksum = 0;  // Checksum will be calculated later
 
         // Fill IP header

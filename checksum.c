@@ -1,5 +1,6 @@
 #include "checksum.h"
 #include <string.h>
+#include <arpa/inet.h>
 
 // Basic checksum function (used for IP header)
 unsigned short calculate_checksum(unsigned short *buf, int nwords) {
