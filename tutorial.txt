@@ -25,6 +25,17 @@ sudo apt install -y gcc-multilib libc6-dev-i386 linux-libc-dev:i386
 sudo apt install -y libc6-dev-mips-cross libc6-dev-arm-cross libc6-dev-arm64-cross
 sudo apt install -y libc6-dev-powerpc-cross libc6-dev-sh4-cross libc6-dev-m68k-cross
 sudo apt install -y libc6-dev-sparc64-cross
+
+# Correction pour l'erreur asm/socket.h
+# Pour x86 32-bit
+sudo mkdir -p /usr/i386-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/i386-linux-gnu/include/asm
+
+# Pour les autres architectures (si nécessaire)
+sudo mkdir -p /usr/mips-linux-gnu/include
+sudo ln -s /usr/include/asm-generic /usr/mips-linux-gnu/include/asm
+sudo mkdir -p /usr/arm-linux-gnueabi/include
+sudo ln -s /usr/include/asm-generic /usr/arm-linux-gnueabi/include/asm
 ```
 
 ### Installation des cross-compilateurs
@@ -37,19 +48,12 @@ sudo apt install -y gcc-sparc64-linux-gnu
 sudo apt-get update
 sudo apt-get install -y gcc-sparc64-linux-gnu
 sudo apt-get install -y libc6-dev-sparc64-cross
-sudo apt-get install -y linux-libc-dev-sparc64-cross
 
-#32 bit
-sudo apt-get install -y gcc-multilib libc6-dev-i386
+## 4. Compilation des binaires bots (multi-arch)
 
-
-# Installation de tous les compilateurs croisés
-sudo apt-get update
-sudo apt-get install -y build-essential
-
-# Compilateurs pour différentes architectures
-sudo apt-get install -y gcc-mips-linux-gnu
-sudo apt-get install -y gcc-arm-linux-gnueabi
+Place-toi dans le dossier du projet :
+```bash
+cd /chemin/vers/botnet-c2-catnet
 sudo apt-get install -y gcc-aarch64-linux-gnu
 sudo apt-get install -y gcc-powerpc-linux-gnu
 sudo apt-get install -y gcc-sh4-linux-gnu

