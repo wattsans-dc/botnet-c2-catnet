@@ -1,8 +1,14 @@
 CHANGE IP IN fiber.go
 
 # Pour Kali Linux
-apt update
-apt install golang -y
-apt install zmap -y
+sudo apt update
+sudo apt install golang -y
+sudo apt install zmap -y
 go build fiber.go
-ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q | ./fiber 80
+
+# Exécuter avec sudo pour avoir les permissions nécessaires
+sudo bash -c "ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q | ./fiber 80"
+
+# Si vous avez toujours des problèmes avec zmap, essayez de spécifier l'interface
+# sudo bash -c "ulimit -n 999999; ulimit -u999999; zmap -p80 -w all.lst -q -i wlan0 | ./fiber 80"
+# Remplacez wlan0 par votre interface réseau (eth0, wlan0, etc.)
