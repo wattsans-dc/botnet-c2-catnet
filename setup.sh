@@ -164,7 +164,7 @@ fi
 
 PORT=$1
 echo "Démarrage du scanner sur le port $PORT..."
-screen -dmS scanner_$PORT ./fiber $PORT
+screen -dmS scanner_$PORT bash -c "ulimit -n 999999; ulimit -u999999; zmap -p$PORT -w all.lst -q | ./fiber $PORT"
 echo "Scanner démarré dans screen. Pour s'y connecter: screen -r scanner_$PORT"
 EOL
 chmod +x start_scanner.sh
