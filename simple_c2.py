@@ -253,13 +253,14 @@ def broadcast_command(command):
 
 # Afficher la bannière du serveur C2
 def print_banner():
-    banner = """
+    # Utiliser r pour les chaînes brutes (raw strings) afin d'éviter les problèmes d'échappement
+    banner = r"""
     ____        _            _     ____ ____  
    | __ )  ___ | |_ _ __   ___| |_  / ___|___ \ 
    |  _ \ / _ \| __| '_ \ / _ \ __|| |     __) |
    | |_) | (_) | |_| | | |  __/ |_ | |___ / __/ 
    |____/ \___/ \__|_| |_|\___|\__(_)____|_____|  
-                                                
+                                                 
     """
     print(banner)
     print("=== Serveur de Commande et Contrôle ===\n")
