@@ -1086,10 +1086,18 @@ void generate_device_id(void) {
     // Essayer d'obtenir le hostname
     gethostname(hostname, sizeof(hostname));
     
+    // Limiter la taille des chaînes pour éviter la troncature
+    char hostname_short[16] = {0};
+    char mac_short[16] = {0};
+    
+    // Copier seulement les 15 premiers caractères pour éviter les débordements
+    strncpy(hostname_short, hostname[0] ? hostname : "unknown", 15);
+    strncpy(mac_short, mac[0] ? mac : "00:00:00:00:00:00", 15);
+    
     // Combiner les informations pour créer un ID unique
     snprintf(device_id, DEVICE_ID_SIZE, "%s_%s_%ld", 
-             hostname[0] ? hostname : "unknown", 
-             mac[0] ? mac : "00:00:00:00:00:00", 
+             hostname_short, 
+             mac_short, 
              (long)time(NULL));
     
     // Remplacer les caractères non-alphanumériques
