@@ -185,6 +185,10 @@ Une fois connecté à la session screen du serveur C2, vous pouvez utiliser les 
 - `kill <id>` - Déconnecte un bot
 - `exit` - Quitte le serveur
 
+## Remerciements
+
+Un grand merci à Dalas pour le code du scanner de bot qui a servi de base pour le développement de ce projet.
+
 ## Architecture du botnet
 
 ### Serveur C2 (simple_c2.py)
