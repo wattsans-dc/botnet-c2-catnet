@@ -6,22 +6,17 @@ Version 2.0
 package main
 
 import (
+	"bufio"
+	"context"
+	"crypto/tls"
 	"fmt"
-    "net"
-    "time"
-    "bufio"
-    "os"
-    "sync"
-    "strings"
-	"strconv"
-    "math/rand"
-    "crypto/tls"
-    "io/ioutil"
-    "net/http"
-    "encoding/base64"
-    "path/filepath"
-    "context"
-    "runtime"
+	"math/rand"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
+	"time"
 )
 
 // Statistiques et synchronisation
