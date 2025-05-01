@@ -10,6 +10,23 @@ CHANGE IP IN fiber.go
 
 ## 2. Compilation du malware (bot.c) pour différentes architectures
 
+### Installation des dépendances
+```
+# Installation des compilateurs croisés
+sudo apt update
+sudo apt install -y gcc-mips-linux-gnu gcc-arm-linux-gnueabi gcc-aarch64-linux-gnu
+sudo apt install -y gcc-powerpc-linux-gnu gcc-sh4-linux-gnu gcc-m68k-linux-gnu
+sudo apt install -y gcc-sparc64-linux-gnu
+
+# Pour la compilation 32-bit
+sudo apt install -y gcc-multilib libc6-dev-i386 linux-libc-dev:i386
+
+# Dépendances supplémentaires pour les headers manquants
+sudo apt install -y libc6-dev-mips-cross libc6-dev-arm-cross libc6-dev-arm64-cross
+sudo apt install -y libc6-dev-powerpc-cross libc6-dev-sh4-cross libc6-dev-m68k-cross
+sudo apt install -y libc6-dev-sparc64-cross
+```
+
 ### Installation des cross-compilateurs
 ```
 sudo apt update
