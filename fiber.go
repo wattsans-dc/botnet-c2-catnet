@@ -62,7 +62,7 @@ var (
         "admin:admin123", "admin:12345", "admin:54321", "admin:pass", "admin:adminadmin",
         "admin:", "root:", "supervisor:supervisor", "ubnt:ubnt", "service:service",
         "guest:12345", "admin:4321", "admin:1111", "admin:666666", "admin:1234567890",
-        "admin:888888", "admin:54321", "admin:00000000", "admin:9999"
+        "admin:888888", "admin:54321", "admin:00000000", "admin:9999",
     }
     
     // Combinaisons spécifiques par fabricant
